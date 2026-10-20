@@ -1,0 +1,1207 @@
+
+--- PAGE 1 ---
+Article
+Spectral-DETR: Learnable Frequency Decomposition with
+Adaptive Contrastive Regularization for Robust Underground
+Mine Detection
+YuexinSong1,2,3 ,LukangDai1,XinqiXu1andJunYang1,2,3,*
+1 SchoolofArtificialIntelligence,HaidianCampus,ChinaUniversityofMiningandTechnology(Beijing),
+Beijing100083,China;2310310319@student.cumtb.edu.cn(Y.S.);2210570718@student.cumtb.edu.cn(L.D.);
+2410403121@student.cumtb.edu.cn(X.X.)
+2 BigDataandInternetofThingsResearchCenter,ChinaUniversityofMiningandTechnology(Beijing),
+Beijing100083,China
+3 KeyLaboratoryofIntelligentMiningandRoboticsforCoalMines,MinistryofEmergencyManagement,
+Beijing100083,China
+* Correspondence:yj@cumtb.edu.cn
+Abstract
+Underground mine object detection is challenged by low illumination, blur, dust scat-
+tering, and repetitive tunnel clutter, which jointly corrupt backbone features, entangle
+DETRqueries,andweakenlocalizationforsmallobjects. Existingenhancement-basedand
+detector-internalmethodsdonotexplicitlypropagatedegradationreliabilityacrossfea-
+tures,decoderqueries,andboxrefinement. WeproposeSpectral-DETR,adetector-internal
+reliabilityframeworkbuiltonRF-DETR.Itscentraldesignisacross-stagereliabilitypath-
+waythatconnectsDegradation-AwareFrequencyDecomposition(DAFD),Degradation-
+AdaptiveQueryContrastiveDenoising(DQCD),andSalience-CalibratedUncertaintywith
+LearnedUncertaintyEstimation(SCU+LUE).OnMine-Objects(14classes,3081images),
+Spectral-DETRachievesanaverageprecisionof0.917atanintersection-over-unionthresh-
+oldof0.5and0.493whenaveragedoverthresholdsfrom0.5to0.95,exceedingYOLOv9m
+by1.6and0.8percentagepoints,respectively,underthedataset-specificevaluationpro-
+tocol. In controlled RF-DETR validation, the three reliability stages improve these two
+measuresfrom0.883to0.913andfrom0.472to0.486,respectively. Spectral-DETRobtains
+corresponding values of 0.848 and 0.571 on ExDark and 0.973 and 0.495 on ScienceDB.
+DQCDandSCUremaintraining-onlylosseswithnoinferencecost.
+Keywords: low-lightobjectdetection;frequency-domainlearning;contrastivelearning;
+uncertaintycalibration;DETR;undergroundmineperception
+AcademicEditor:Nikolaos
+1. Introduction
+Mitianoudis
+Reliableobjectdetectionissafety-criticalinundergroundmines,wheremisseddetec-
+Received:25June2026
+Revised:2August2026 tionsofpersonnel,warningsigns,andelectricalequipmentdirectlyaffecthazard-warning
+Accepted:21August2026 systemsandpersonnelsafety. Undergroundimageryiscapturedundercoupleddegra-
+Published:26August2026 dations(lowillumination,motionblur,dustscattering,andrepetitivetunnelclutter)that
+Copyright:©2026bytheauthors. suppresslocalcontrast,weakenobjectboundaries,andobscureforegroundstructure. De-
+LicenseeMDPI,Basel,Switzerland.
+tectorsdevelopedundercleanimagingassumptionssufferasubstantialrobustnessgap
+Thisarticleisanopenaccessarticle
+whendeployedunderground[1–3].
+distributedunderthetermsand
+ThisgapisparticularlysevereforDETR-styleend-to-enddetectors[4]. Indegraded
+conditionsoftheCreativeCommons
+Attribution(CCBY)license. scenes, performance loss is not caused by an isolated component; instead, degrada-
+J.Imaging2026,12,401 https://doi.org/10.3390/jimaging12090401
+
+--- PAGE 2 ---
+J.Imaging2026,12,401 2of24
+tionprogressivelybreaksthedetector’sinternalreliabilitychainatthreecoupledpoints:
+(i)featurecorruption: backbonefeaturesaredegradedbyfrequency-specificeffects[1,2]
+(low-frequencyilluminationattenuation,mid-frequencytextureerosionfromblur,high-
+frequencynoisefromdust)beforetheyfeeddecoderqueryformation;(ii)representation
+entanglement: matchedforegroundqueriesandunmatchedbackgroundqueriesbecome
+tangledinthedecoderembeddingspace,especiallywhenhardnegativelocationsarevisu-
+allysimilartodegradedforegroundobjects;and(iii)localizationunder-optimization:after
+successfulquerymatching,themostdifficultsmall/mediumtargetsstillreceiveinsufficient
+refinementbecausestandardL1andGIoUlossesdistributegradienteffortuniformlyacross
+allpositives[4,5].
+Existingapproachesaddressrelateddifficultiesthroughlow-lightenhancementand
+degraded-image learning [2,6], detector architecture redesign [7,8], uncertainty-aware
+regression[9,10],andfrequency-inspiredlearning[11,12]. Theseeffortsarevaluablebut
+leavethreelimitationsinoursetting. First,enhancementmodulestypicallyoperateoutside
+thedetectorandmayintroduceartifactsthatarenotalignedwiththedetectionobjective.
+Second,uncertaintymodelinginDETR-styledetectorsremainsunder-explored[4,13,14];
+mostformulationstargetanchor-basedCNNdetectorsortreatuncertaintyasapassive
+qualityscore[15]ratherthanasalocalization-weightingsignal. Third,frequency-domain
+learning usually focuses on feature transformation alone [11,12] and does not connect
+learnedfrequencyreliabilitytodownstreamqueryregularization. Whatisstillmissingis
+adetector-internalframeworkthattreatsdegradeddetectionasareliabilitypropagation
+problemacrossfeatures,queries,andlocalization.
+Toaddressthisgap,weproposeSpectral-DETR,adetector-internalreliabilityframe-
+workbuiltonRF-DETR[16]. Ratherthanaddingaseparateimage-restorationfront-end,
+Spectral-DETRimplementsonereliabilitypathwayacrossthreepointswheredegradation
+affectsthedetectionpipeline:
+• Featurereliability: DAFDperformsFFT-baseddecompositionintothreelearnable
+Gaussianbands,appliesper-bandscene-adaptiveFiLMandgating,reconstructseach
+bandbyIFFT,andfusesthespatialbandsthroughacross-bandconvolutionwitha
+scaledresidual.Thebandgeometry,FiLMencoders,gates,andfusionlayeraretrained
+end-to-endbydetectionlossgradients.
+• Query reliability: DQCD applies supervised contrastive learning to final decoder
+queryembeddings. ItsInfoNCEtemperatureismodulatedbyDAFDgatestatistics,
+so images with stronger frequency suppression receive stronger query separation.
+DQCDrequiresnopairedviews,teachermodel,orauxiliarynetworkandisusedonly
+duringtraining.
+• Localizationreliability: SCU+LUEpredictscoordinate-levellog-variances,calibrates
+themusinggeometricsalience,andprecision-weightsL1regressionforsmall/medium
+objectswhileretainingstandardGIoUsupervision. Thisturnsuncertaintyestimation
+intoanexplicitlocalization-refinementsignalratherthanonlyadiagnosticoutput.
+Thecontributionsare:
+• Weformulatedegradedundergrounddetectionasdetector-internalreliabilityprop-
+agationandmakethecross-stagepathwayexplicit: DAFDgatestatisticscondition
+DQCDtemperature,whileSCU-calibratedLUEweightslocalizationsupervision.
+• We provide a task-driven multi-band frequency implementation (DAFD) and a
+decoder-querycontrastiveobjective(DQCD)whoseindividualoperatorsareestab-
+lishedideasadaptedtothiscoupleddetectorsetting.
+• WeprovideSCU+LUEasageometriccalibrationandprecision-weightingmechanism
+forsmall/medium-objectlocalization,andevaluatetheindividualstages,pairwise
+combinations,andcouplingcontrolsunderacommonRF-DETRprotocol.
+https://doi.org/10.3390/jimaging12090401
+
+--- PAGE 3 ---
+J.Imaging2026,12,401 3of24
+2. RelatedWork
+2.1. Transformer-BasedDetectionandDegraded-SceneRobustness
+Beforetransformer-baseddetectors,two-stageandone-stageCNNdetectorsestab-
+lishedthemainaccuracy-efficiencytrade-offsinobjectdetection,includingFast/Faster
+R-CNN[17,18],SSD[19],RetinaNet[20],FCOS[21],EfficientDet[22],andYOLO-family
+detectors [23–27]. DETR [4] and its variants, including Deformable DETR [13], DAB-
+DETR[14],DN-DETR[28],DINO[29],andRT-DETR[30,31],haveimprovedconvergence
+andefficiencythroughdeformableattention,dynamicanchors,querydenoising,andreal-
+timearchitectures. Co-DETR[32]andH-DETR[33]addresstrainingefficiencythrough
+hybridlabelassignment. RF-DETR[16]providesastrongDINOv2-basedbaseline[34]with
+multi-scaleprojectionandtwo-stagequeryselection. TheVisionTransformer[35]andits
+hierarchicalvariants[36]havealsoinspireddetectorbackbones,whileFeaturePyramid
+Networks[37]remainfoundationalformulti-scalefeatureextraction.
+Forrobustnessunderdegradation,low-lightenhancement[2,6,38–40]andfrequency-
+domainmodeling[11,12]havemadeprogress. AttentionmechanismssuchasSE,CBAM,
+andFcaNetalsoshowthatchannelandfrequencystatisticscanimprovevisualrepresen-
+tations [41–43]. More recent detector-specific studies narrow the novelty space further.
+MPE-DETRusesmultiscalepyramidenhancementforlow-lightdetection[44];MDFD2-
+DETRdecomposesandde-redundifiesmulti-domainfeaturesforcomplexroadscenes[45];
+andfrequency-enhancedTransformershavebeendevelopedfornighttimeandlow-light
+detection[46,47]. Spectral-DETRthereforedoesnotclaimthatfrequencyprocessingin-
+sideadetectorisitselfnovel. Itsdistinctionisthecombinationofoverlappinglearnable
+Gaussianbands,scene-conditionedper-bandgatesonintermediateencodertaps,andan
+explicitdownstreaminterfaceinwhichthegatestatisticconditionsquery-levelcontrastive
+temperature. SCU+LUEthenextendsreliabilityweightingtolocalization. Thiscross-stage
+information path, rather than any individual FFT or uncertainty operator, defines the
+contributionrelativetocontemporarywork.
+Beyond single-modal detection, multimodal object detection has been explored
+for degraded-scene perception by fusing complementary modalities such as RGB-D,
+RGB-T,andRGB-IR.CCAFNet[48]andIRFR-Net[49]developcrossflowandrecursive
+feature-reshaping fusion for RGB-D salient object detection; ECFFNet [50], LSNet [51],
+andWaveNet[52]combineRGBwiththermalinfraredthroughconsistentfeaturefusion,
+lightweightspatialboosting,andwavelet-basedknowledgedistillationforRGB-Tsalient
+objectdetection;LSINet[53]andRCNet[54]addressrailandroadsurface-defectdetection
+withlightweightscopeintegrationanddual-networkresonancecollaboration;PriorsMeet
+Hindsight[55]adoptsasymmetriccollaborativeevolutionforRGB-Droaddefectdetection;
+andTurbidity–SimilarityDecoupling[56]andSAM-CLNet[57]targetunderwatersalient
+objectdetectionthroughfeature-consistentmutuallearningandprompt-freeSAMenhance-
+ment. Theseworksdemonstratethatcomplementarymodalitiescanmitigatesingle-sensor
+degradation. However,oursettingdiffersintworespects: (i)undergroundmineplatforms
+typicallycarryonlymonocularRGBcamerasduetocost,explosion-proofing,andpayload
+constraints,makingmultimodalapproachesinapplicable;and(ii)Spectral-DETRaddresses
+single-modalreliabilitypropagationinsidethedetector,specificallyforDETR-stylearchi-
+tectures. Multimodalfusionisacomplementarydirectionthatcouldbeintegratedwith
+ourreliabilityframeworkinfuturework,butitisnotthefocusofthepresentstudy.
+https://doi.org/10.3390/jimaging12090401
+
+--- PAGE 4 ---
+J.Imaging2026,12,401 4of24
+2.2. ContrastiveLearninginObjectDetection
+Contrastive learning has improved representation quality in visual representation
+learninganddetection[58,59]. DetCo[59],forexample,appliesinstance-levelcontrastive
+pretraining, while widely used contrastive objectives commonly retain a fixed global
+temperature [60]. DQCD instead operates on decoder query embeddings and uses an
+image-conditionedtemperaturederivedfromDAFDgatestatistics. Itthereforeregularizes
+therepresentationsuseddirectlyforclassificationandlocalization,withoutrequiringa
+teachermodel,pairedviews,oranauxiliaryinferencenetwork. Wedonotpresentquery-
+levelcontrastivelearningitselfasanewprimitive;thecontributionisitsdetector-specific
+constructionanditsexplicitcouplingtotheupstreamfrequency-reliabilitysignal.
+2.3. UncertaintyEstimationforLocalization
+Aleatoricuncertaintymodeling[9]motivateddetection-specificformulationsinclud-
+ingKL-basedboxlearning[10]andIoU-awarequalityestimation[15,61]. Thesemethods
+showthatlocalizationqualityisspatiallynon-uniform. However,mostDETR-styledetec-
+torsstillusedeterministicL1+GIoU[4,5]supervisionthatweightsallpositivesuniformly.
+SCU+LUEadaptsthisestablisheduncertainty-regressionideatothepresentDETRpipeline
+bycombiningcoordinate-levellog-varianceprediction,batch-centeredprecisionweights,
+andageometric-saliencecalibrationtarget. Themethodisintendedtoimproverelative
+localizationweighting;uncertaintycorrelationistreatedasasupportingdiagnosticrather
+thanconclusivecalibrationevidence.
+3. ProposedMethod
+3.1. OverviewandReliabilityPropagationFramework
+Weformulatedegradedundergrounddetectionasdetector-internalreliabilitypropa-
+gationthroughthreecoupledstages. Letx
+∈RB×3×H×W
+denoteabatchofinputimages,
+whereB,H,andW arethebatchsize,imageheight,andimagewidth,respectively. TheDI-
+NOv2backboneexposesfourintermediateencodertaps{f ,..., f },andDAFDprocesses
+1 4
+thesetapsbeforethemulti-scaleprojector. Theresultingprojectedfeaturesfeedthedecoder
+andthetwotraining-timereliabilityobjectives:
+1. DAFD(FeatureReliability): Learnablethree-bandfrequencydecompositionwith
+scene-adaptivegating,appliedbeforemulti-scaleprojection. Suppressesfrequency-
+specificdegradationwhilepreservingtask-relevantstructure.
+2. DQCD(RepresentationReliability): Adaptivecontrastiveregularizationoverde-
+coderqueryembeddings.DAFD’sgatestatisticsmodulatethetemperature,providing
+strongerforeground-backgroundseparationonmoredegradedimages.
+3. SCU+LUE(LocalizationReliability): Coordinate-levellog-variancescalibratedby
+geometricsalience,precision-weightingtheL1regressionlossforsmall/mediumobjects.
+Figure1illustratestheoverallarchitecture. Themodulesarecomplementary: DAFD
+improvesfeaturequalityenteringthedecoder,DQCDimprovestheseparabilityofresulting
+queryrepresentations,andSCU+LUEimprovestheprecisionoffinalboxpredictions. Criti-
+cally,DAFDexposesper-bandgatestatisticsthatDQCDusesfortemperaturemodulation,
+formingadirectinformationpathwayfromthefrequencydomaintocontrastivelearning.
+Figure2summarizesthethreemoduledesigns.
+https://doi.org/10.3390/jimaging12090401
+
+--- PAGE 5 ---
+J.Imaging2026,12,401 5of24
+Figure1.OverallarchitectureofSpectral-DETR.DAFDimprovesfrequency-awarefeatures,DQCD
+regularizesdecoderquerieswithaDAFD-modulatedtemperature,andSCU+LUEcalibratesuncer-
+taintyforprecision-weightedlocalization. Solidarrowsdenoteinferencecomputation;greenand
+blackdashedarrowsdenotetraining-onlyobjectivesandcross-stagereliabilitysignals,respectively.
+ModulecolorsidentifyDAFD(blue),DQCD(orange),SCU+LUE(green),anddetectorcomponents
+(gray).Onlyrepresentativenegativequeriesareshown.
+Figure 2. Module design of Spectral-DETR. (a) DAFD applies learnable Gaussian bands, FiLM,
+reliabilitygates,IFFTreconstruction,andcross-bandfusion.(b)DQCDappliesDAFD-conditionedIn-
+foNCEregularizationtodecoderqueriesduringtraining[62].(c)SCU+LUEpredictscoordinate-level
+log-variances,usesthemtoprecision-weighttheL1term,andretainsstandardGIoU.Localization
+andcalibrationpathsaretraining-only;LUEoutputsmayoptionallyberetainedforinferencediag-
+nostics. Dashedoutlinesdenoteauxiliaryortraining-onlycomponents,andsolidoutlinesdenote
+forward-computationblocks.
+3.2. DAFD:Degradation-AwareFrequencyDecomposition
+Thefirststageaddressesfeature-levelcorruption. Inundergroundimagery,frequency-
+specificdegradationaffectsdifferentbands: lowilluminationattenuateslow-frequency
+structure, motion blur erodes mid-frequency texture, and dust scattering injects high-
+https://doi.org/10.3390/jimaging12090401
+
+--- PAGE 6 ---
+J.Imaging2026,12,401 6of24
+frequencynoise. Afixedfiltercannotadapttothevaryingmixtureoftheseeffects. DAFD
+isdesignedasafullylearnablefrequency-domainmodule(Figure2a).
+3.2.1. Multi-BandFrequencyDecomposition
+Givenabackbonefeaturemap f
+∈RB×C×Hf ×Wf,whereC,H
+,andW denotechannel
+f f
+count and feature-map dimensions, DAFD applies a two-dimensional real-valued fast
+Fouriertransform(2DRealFFT).Becausetheinputisreal,conjugatesymmetrypermits
+retainingonly⌊W /2⌋+1coefficientsalongthelastfrequencyaxis:
+f
+F = F (f) ∈CB×C×Hf ×W fft, (1)
+rfft
+whereW = ⌊W /2⌋+1. Indicesu ∈ {0,...,H −1}andv ∈ {0,...,W −1}identify
+fft f f fft
+frequency coordinates; ξ and η are their normalized signed frequencies produced by
+u v
+fftfreqandrfftfreq,respectively. Theradialfrequencyis
+(cid:113)
+r(u,v) = ξ2 +η2. (2)
+u v
+ThreefrequencybandsaredefinedbylearnableGaussiansoftmaskswithrawcenter
+parametersc = [c ,c ,c ]andwidthparametersw = [w ,w ,w ]. Aftersigmoidrescaling:
+0 1 2 0 1 2
+c˜ =0.6·σ(c )+0.05∈ [0.05,0.65], w˜ =0.3·σ(w )+0.05∈ [0.05,0.35], (3)
+k k k k
+(cid:32) 1 (cid:18) r(u,v)−c˜ (cid:19)2 (cid:33)
+M (u,v) =exp − k , k ∈ {0,1,2}, (4)
+k 2 w˜ +ϵ
+k
+whereσ(·)isthesigmoidfunction. TheGaussianmasksareintentionallynotnormalized
+across bands. This allows overlapping soft responses and lets the learned gates truly
+suppress or preserve spectral energy, instead of forcing all frequency coordinates to be
+partitionedwithunittotalmass.Therawbandparametersareinitializedinincreasingorder
+withcenters[0.10,0.35,0.60]andwidths[0.12,0.18,0.25],providingaphysicallygrounded
+low/mid/high-frequencypriorbeforeend-to-endtask-drivenreallocation.
+3.2.2. Per-BandGatingwithScene-AdaptiveFiLM
+For each band k, frequency components are extracted via F = F⊙M , where ⊙
+k k
+denoteselement-wisemultiplicationwithbroadcastingoverbatchandchanneldimensions.
+Feature-wise Linear Modulation (FiLM) applies a learned channel-wise affine transfor-
+mation. Here, a scene encoder (AdaptiveAvgPool2d → Linear → ReLU → Linear, re-
+ductionratio4)predictstheFiLMscaleγ andshiftβ fromthelog-amplitudespectrum
+k k
+A =log(1+|F |):
+k k
+(γ ,β ) =SceneEncoder (A ). (5)
+k k k k
+Aper-bandgatingnetwork(Conv 1×1 →ReLU→Conv 1×1 )predictsrawgatescondi-
+tionedbyFiLM:
+G = σ(Gate (A )⊙γ +β ), (6)
+k k k k k
+whereσisthesigmoidfunction. Thefinalgateconvolutionisinitializedwithzeroweights
+andbiaslogit(0.8),soeverygateinitiallypreservesapproximately80%ofitsbandresponse
+whileretainingnon-saturatedgradients. ThegatedbandisF˜ = F ⊙G .
+k k k
+https://doi.org/10.3390/jimaging12090401
+
+--- PAGE 7 ---
+J.Imaging2026,12,401 7of24
+3.2.3. Cross-BandFusionandReconstruction
+Eachgatedfrequencybandisindependentlyreconstructedtothespatialdomainvia
+inverseFFT,thenfusedinthespatialdomaintoavoidcomplex-valuedconvolutions:
+fˆ = F (F˜ ) ∈RB×C×Hf ×Wf, (7)
+k irfft k
+f fused =Conv 1×1 (cid:0) [fˆ 0 ; fˆ 1 ; fˆ 2 ] (cid:1) ∈RB×C×Hf ×Wf. (8)
+Thefusedspatial-domainrepresentationisaddedthroughascaledresidualconnection:
+f = f +αf , (9)
+out fused
+whereα =0.15. Thecross-bandfusioniszero-initialized,soDAFDstartsasidentityand
+graduallylearnstofilter. PerformingIFFTbeforefusion(ratherthanfusinginfrequencydo-
+main)avoidscomplex-valuedconvolutionswhilepreservingtheband-specificinformation
+throughthechannel-wiseconcatenation. Asparsityregularizerpreventsgatecollapse:
+L =
+1 ∑ 2 (cid:0)E[G
+]−0.8
+(cid:1)2
+, (10)
+sparsity k
+3
+k=0
+where E[G ] denotesthemeanoverthebatch, channel, andtwofrequencydimensions.
+k
+Thistermisweightedby10−5inthetotalobjective.
+3.2.4. DAFDDesignRationale
+Three properties distinguish DAFD: (1) Task-driven band learning: band bound-
+aries are not fixed heuristics; they are optimized by detection loss gradients, enabling
+task-specificfrequencyallocation. (2)Scene-adaptiveper-bandmodulation: eachband
+receivesindependentFiLMconditioningbasedonitsownspectralstatistics,allowingdif-
+ferentialtreatment(e.g.,boostinglowfrequenciesunderdarknesswhilesuppressinghigh
+frequenciesunderdust). (3)End-to-endsingle-stagetraining: nopretraining,auxiliary
+reconstructionloss,orpairedviewsrequired. Per-bandgatestatistics(E[G ])areexposed
+k
+downstreamforDQCDtemperaturemodulation.
+3.3. DQCD:Degradation-AdaptiveQueryContrastiveDenoising
+Thesecondstageaddressesqueryrepresentationentanglement. Indegradedscenes,
+hard negative background queries (locations visually similar to degraded foreground
+objects)crowdtheembeddingspace. Standardcontrastivelearningusesfixedtemperature,
+ignoringper-imagevariationindegradationseverity.
+DQCDappliesasupervisedInfoNCEobjectiveoverfinal-layerdecoderqueryembed-
+dings(Figure2b).Crucially,temperatureisadaptivelymodulatedbyDAFD’sgatestatistics.
+Weretaintheterm“denoising”becauseDQCDregularizesthequeryembeddingspace
+bypushingambiguousbackgroundnegativesawayfromforegroundanchors,aformof
+representationdenoisinganalogoustoitsuseinself-supervisedlearning[58].
+3.3.1. DAFD-ModulatedTemperature
+Let{G ,G ,G }beDAFD’sper-bandgatemapsfromencodertap0,theconfigured
+0 1 2
+gate-sourcetapinthefinalmodel. Theaveragegateactivationacrossallbandsandall
+non-batchdimensionsiscomputedindependentlyforeachimage:
+g¯ = 1 ∑ 2 E[G ]. (11)
+k
+3
+k=0
+https://doi.org/10.3390/jimaging12090401
+
+--- PAGE 8 ---
+J.Imaging2026,12,401 8of24
+g¯ isalearnedfrequency-preservationstatistic,notacalibratedground-truthdegra-
+dationscore. Largervaluesindicatethatmorebandresponsepassesthroughthelearned
+gates. TheDAFD-modulatedtemperatureis
+
+0.5+1.0·g¯, ifDAFDisactive,
+τ = τ ·m, m = (12)
+base
+1.0, otherwise.
+where τ = 0.15. At the initialization value g¯ ≈ 0.8, τ ≈ 0.195; smaller preservation
+base
+valuesproducelowertemperaturesandsharpercontrastiveseparation. WhenDAFDis
+disabled,themodulationfallsbacktom =1,recoveringfixed-temperatureInfoNCE.Fixed,
+image-alignedadaptive,shuffled,andrandom-gatecontrolsareincludedintherevision
+experimentprotocoltodeterminewhetherthecross-stagesignalcontributesbeyondthe
+twomodulesthemselves.
+3.3.2. ContrastiveObjective
+Let h ∈ RC denote the L2-normalized final decoder layer embedding of matched
+i
+queryi. PositivesP include:
+i
+• Cross-layerpositives: thesamequery’sembeddingsfromprecedingdecoderlayers
+nearthefinallayer,providingalways-availablepositivesthatavoidthe“nosame-class
+positives”failuremodecommonindetection.
+• Same-classpositives: othermatchedqueriesofthesameclassinthebatch.
+NegativesN aretheunmatchedbackgroundqueriesfromthesameimageasanchor
+i
+i. Foreachanchor,hardnegativesarerankedbyh⊤h +0.25a ,whereh⊤h denotesthe
+i n n i n
+vectorinnerproductanda =1−|p −p |isclassificationambiguitycomputedfrom
+n n,1 n,2
+thetoptwosigmoidclassprobabilities. Thecentereddotusedelsewheredenotesordinary
+scalarmultiplication. ThetopK =128negativesareretained;iffewerunmatchedqueries
+areavailable,allareused.
+TheInfoNCElossforanchori:
+∑ exp(h⊤h /τ)
+L (i) = −log p∈P i i p . (13)
+DQCD ∑ exp(h⊤h /τ)+∑ exp(h⊤h /τ)
+p∈P i i p n∈N K i n
+TheunweightedDQCDlossaveragesovermatchedanchors:
+L =
+1 ∑
+L
+(i)
+, (14)
+DQCD |A| DQCD
+i∈A
+whereAisthesetofmatchedanchors. Thefinallosscoefficientisλ = 0.08. Cross-
+DQCD
+layerpositivesensurethatananchorremainsvalidevenwhennoothersame-classmatch
+existsinthemini-batch.
+DQCDiszerobeforeepoch8andisthenlinearlywarmedtoitsfullcoefficientover
+fiveepochs. Itisatraining-onlyobjectivewithzeroinferencecost.
+3.4. SCU+LUE:Salience-CalibratedPrecision-WeightedLocalization
+Thethirdstageaddresseslocalizationunder-optimization. StandardL1regression
+weightsallpositivesequally,butdegradedsmall/mediumtargetsrequiremorerefinement
+pressure. Wedesignatwo-componentsystem: LUEpredictscoordinate-levellog-variances
+forprecision-weightedregression,andSCUprovidesexplicitcalibrationtargets(Figure2c).
+https://doi.org/10.3390/jimaging12090401
+
+--- PAGE 9 ---
+J.Imaging2026,12,401 9of24
+3.4.1. LUE:LearnedUncertaintyEstimation
+AnMLPhead(3-layer,hidden_dim→hidden_dim→4,identicalarchitecturetothe
+boxhead)predicts4-dimensionallog-varianceslogσ2 ∈R4perquery:
+logσ2 =MLP (h ). (15)
+var dec
+The head is initialized with zero weights and bias −5.0, giving initial variance
+exp(−5.0) ≈ 0.0067. This prevents the “uncertainty trap” where under-confident pre-
+dictionsreceivenogradientearlyintraining.
+Precision-WeightedL1Regression. Duringtraining,log-variancesarebatch-centered
+fordiscriminability:
+logσ˜2 =logσ2−logσ2, (16)
+thenclampedandexponentiatedtoprecision:
+p =exp(−clamp(logσ˜2,−1.5,1.1)) ∈ [0.33,4.48]. (17)
+Theclampboundsproducea13.6×precisionrange,sufficientformeaningfuldifferen-
+tiationwithoutgradientinstability. Precisionismean-normalized:
+p
+pˆ = . (18)
+E[p]+ϵ
+Anadaptiveareathresholddetermineswhichobjectsreceiveprecisionweighting:
+τ =clamp
+(cid:0)
+3.0·median({w h }
+Npos),
+0.02, 0.15
+(cid:1)
+. (19)
+area j j j=1
+Thisthresholdiscomputedfromthemediannormalizedareaofthematchedpositive
+targetsinthecurrentbatchandthereforeadaptsbatch-wise. Forexample,whenthebatch
+medianareaisapproximately0.003,theunclampedvalueisapproximately0.009andis
+clippedtothelowerbound,yielding(τ = 0.02); foramedianareaofapproximately
+area
+0.03, (τ ≈ 0.09); and for approximately 0.05, (τ ) reaches the upper bound of 0.15.
+area area
+Thesmall/mediummaskisdefinedasm =⊮[w h < τ ].
+j j j area
+The precision-weighted L1 loss is computed for small/medium objects, with a
+warmup-controlledblendbetweenprecision-weightedandplainL1:
+Lw = 1 ∑ 4 (cid:2) m ·pˆ ·|b pred−b gt|+(1−m )·|b pred−b gt| (cid:3) , (20)
+bbox 4 j j,d j,d j,d j j,d j,d
+d=1
+L0 = 1 ∑ 4 |b pred−b gt|, (21)
+bbox 4 j,d j,d
+d=1
+L = 1 N ∑ pos (cid:2) ρ·Lw +(1−ρ)·L0 (cid:3) , (22)
+bbox N bbox bbox
+pos j=1
+where ρ = min(1,epoch/T ) ∈ [0,1] is the LUE warmup ratio and T = 15.
+warmup warmup
+Duringwarmup,ρrampsfrom0to1,smoothlytransitioningfromplainL1toprecision-
+weightedL1. This blendingensures theboxhead stabilizesbeforeprecision weighting
+takeseffect. ThestandardGIoUlossisretainedunchanged.
+UncertaintyCalibrationLoss. Log-variancesaresupervisedagainstaboundedlog-
+errortarget. Foreachcoordinate,thedetachedL1errorisclampedafterthelogarithmto
+[−7,0],andSmoothL1withtransitionparameterδ =0.5isusedratherthananunbounded
+squarederror:
+(cid:16) (cid:16) (cid:17) (cid:17)
+q =clamp log sg(|b pred−b gt|)+ϵ ,−7,0 , (23)
+j,d j,d j,d
+https://doi.org/10.3390/jimaging12090401
+
+--- PAGE 10 ---
+J.Imaging2026,12,401 10of24
+L unc = N ρ N ∑ pos m j · 1 4 ∑ 4 SmoothL1 δ=0.5 (logσ j 2 ,d ,q j,d ), (24)
+pos j=1 d=1
+where sg(·) denotes stop-gradient and ϵ is a numerical floor. The lower clamp avoids
+unreachabletargetsascoordinateerrorsapproachzero. Thesamewarmupratioρgates
+thisloss,andthestandardGIoUlossremainsunchangedinthefinalconfiguration.
+3.4.2. SCU:Salience-CalibratedUncertainty
+LUElearnsvariancespassivelyfromregressionerrors. However,uncertaintyshould
+alsoreflectgeometricdifficulty: apredictionfarfromtheground-truthcentershouldcarry
+higheruncertaintythanaperfectlycenteredone,evenatsimilarL1error. SCUprovides
+thisprior.
+Formatchedqueryj,geometricsalienceis:
+ 
+∥c pred−c gt∥
+j j 2
+s
+j
+=exp−
+max(w gt ,h gt)/2
+, (25)
+j j
+wherec = (c ,c ). Saliencedecaysexponentiallywithrelativecenterdistance: s ≈ 1for
+x y
+well-centeredpredictions,s ≈0.37atoneobject-radiusoffset.
+Thecalibrationtargetmapssaliencetoexpectedlog-variance:
+tcal = −1.5s −4.2, (26)
+j j
+producing: s = 1.0 ⇒ tcal = −5.7 (high confidence, σ2 ≈ 0.003), s = 0.5 ⇒ tcal =
+j j j j
+−4.95(moderateconfidence,σ2 ≈ 0.007),ands = 0.0 ⇒ tcal = −4.2(lowerconfidence,
+j j
+σ2 ≈0.015). Thetargetrangeisintentionallyclosetothelog-varianceheadinitialization
+and the empirical LUE operating range, so SCU calibrates relative confidence without
+forcingunstableabsolutevariances. TheunweightedSCUcalibrationlossappliesstop-
+gradientonthecalibrationtargetandisgatedbytheLUEwarmupratio:
+L = ρ N ∑ pos m · (cid:0) logσ2−sg(tcal) (cid:1)2 , (27)
+SCU N j j j
+pos j=1
+wherelogσ2 = 1∑4 logσ2 istheper-querymeanlog-variance,ρistheLUEwarmup
+j 4 d=1 j,d
+ratiodefinedabove,andsg(·)denotesstop-gradient. SCUsharestheLUEwarmupsched-
+ule,soitactivatesonlyafterthelog-varianceheadhaspartiallyconverged. Thecoefficient
+λ =0.1isappliedinthetotaltrainingobjective.
+SCU
+3.4.3. SCUDesignRationale
+TheLUE+SCUpipelineformsaclosedloop: LUEpredictsvariances→SCUcalibrates
+them against geometric salience → calibrated variances precision-weight L1 → better
+boxesyieldmoreaccuratesalience. Atinference,alluncertaintytermsaredetachedand
+contributeonlydiagnosticinformation;thestandardclassificationscoresandboxoutputs
+determinethefinalpredictions,preservingqueryorderingfromupstreammoduleswithout
+anyuncertainty-basedreranking.
+3.5. TrainingObjective
+Thetotallossis:
+L = L +L +L +L
+total cls bbox GIoU unc
+(28)
++λ L +λ L +λ L ,
+SCU SCU DQCD DQCD sparsity sparsity
+https://doi.org/10.3390/jimaging12090401
+
+--- PAGE 11 ---
+J.Imaging2026,12,401 11of24
+whereL isthesigmoidfocalclassificationlossusedinallcontrolledRF-DETRconfig-
+cls
+urations. The reliability-module ablations keep this classification objective fixed. Loss
+coefficientsforclassification,boxL1,GIoU,anduncertaintyare2.0,5.0,5.0,and0.5,respec-
+tively;λ =0.1,λ =0.08,andλ =10−5. Hungarianmatchingcostsusethe
+SCU DQCD sparsity
+same2:5:5classification–L1–GIoUratio.
+4. Experiments
+4.1. Datasets
+Weevaluateonthreedatasetsspanningin-domainmining,anadditionalminedomain,
+andgenericlow-lightconditions.
+Mine-Objects (Self-built). Public datasets with reliable mine-specific annotations
+remainscarce. WeconstructMine-Objectscontaining3081high-resolutionimagesfrom
+vehicle-mountedexplosion-proofcamerasinrealundergroundtunnels,covering14cat-
+egories: person, redlight, light, port, sign, warn, gear, car, mine-car, ele-warn, camera,
+generator,annihilator,andelectric-wire. Thefixed8:1:1splitcontains2464training,308val-
+idation,and309testimages. Splittingisperformedattheacquisition-sequencelevelbefore
+frameselection,soadjacentframesfromonesourcesequencecannotappearacrosstrain-
+ing,validation,andtestpartitions. Thisconservativeseparationreducesthenumberof
+retainedimagesbutpreventstemporalnear-duplicateleakage. Thevalidationsetisused
+formodelselectionandhyperparameterdecisions,whereasthetestsetisreservedforthe
+finalcomparisoninTable1. Trainingdataisaugmentedwithilluminationdegradation,
+Gaussiannoise(dustsimulation),andaffineblur(vibrationsimulation).
+Table1.Comparisonontheheld-outMine-Objectstestset.†Sm-APisevaluatedonsevencategories
+withmeaninstancearea<322pixels(person,redlight,light,port,warn,gear,electric-wire)andis
+distinctfrominstance-levelCOCOAP .Bold=best.
+S
+Overall Small-Object(†)
+Method Params(M)
+AP@0.5 AP@0.5:0.95 Sm-AP@0.5 Sm-AP@0.5:0.95
+YOLOv9s[27] 7.1 0.898 0.487 0.853 0.435
+YOLOv9m[27] 20.1 0.901 0.485 0.858 0.438
+YOLOv8m[26] 25.9 0.898 0.481 0.859 0.430
+YOLOv8l[26] 43.7 0.902 0.483 0.861 0.432
+RT-DETR[31] 32.0 0.896 0.481 0.866 0.423
+DeformableDETR[13] 40.0 0.862 0.410 — —
+Frequency-awareDETRbaseline 31.5 0.887 0.468 0.845 0.411
+Spectral-DETR(Ours) 33.5 0.917 0.493 0.892 0.451
+CoalMineUndergroundDrillingSiteObjectDetectionDataset(ScienceDB,Public).
+WeadditionallyuseversionV1oftheScienceDataBankrecord“CoalMineUnderground
+DrillingSiteObjectDetectionDataset”publishedbyZhouetal.[63](ScienceDBaccession:
+https://doi.org/10.57760/sciencedb.j00001.01020,directDOIlandingpage,notthegeneral
+scidb.cn(https://www.scidb.cn/)portal). Thereleasecontains70,948imagescollectedat
+undergroundcoal-minedrillingsites,withPASCALVOCannotationsforfivecategories:
+gripper,chuck,coalminer,minesafetyhelmet,anddrillpipe. Therecordisdistributed
+under CC BY 4.0. Because the release provides annotations rather than an official de-
+tector benchmark split, we convert it to COCO format and create a deterministic 80:20
+train/validationpartitionbysortingpairedimage–annotationidentifiersandthenshuffling
+themwithseed42. Wereporttheresultingvalidationsetasanadditionaldataset-specific
+mine-domainbenchmarkratherthanaszero-shotcross-minetransfer.
+ExDark(Public). Forextremelow-lightevaluationbeyondmining,weuseExDark[6]
+(7363 images, 10 illumination levels, 12 categories). Results on external datasets are re-
+https://doi.org/10.3390/jimaging12090401
+
+--- PAGE 12 ---
+J.Imaging2026,12,401 12of24
+portedasdataset-specificevaluationsunderthesameresolutionandtrainingrecipeunless
+otherwisenoted;wedonotclaimzero-shottransferacrossdatasets.
+4.2. EvaluationProtocol
+Wefollowadataset-specificevaluationprotocolratherthanacross-datasettransfer
+protocol. ForMine-Objects,thefixed8:1:1splitisusedfortraining,validation,andfinal
+testing. Thevalidationsetisusedformodelselection,hyperparametertuning,andablation
+analysis, whereas the held-out test set is used only for the final comparison in Table 1.
+ScienceDBusesthedeterministicconverted80:20partitiondescribedaboveandisevaluated
+onitsvalidationpartition;ExDarkusesitsstateddataset-specificpartition. Botharetrained
+withdataset-specificclassificationheads.Theysharetheinputresolution,metricdefinitions,
+andpost-processingprotocolwiththemainexperiments,buttheirresultsshouldnotbe
+interpretedaszero-shottransferunlessexplicitlystated.
+WereportCOCO-styleaverageprecision[64]atAP@0.5andAP@0.5:0.95.AP@0.5mea-
+surescoarsedetectionreliability,whereasAP@0.5:0.95evaluatesstricterlocalizationacross
+IoUthresholds. ForMine-ObjectsandExDark,weadditionallyreportcategory-conditioned
+small-footprintAP(Sm-AP).Sm-APiscomputedonlyovercategorieswhosemeaninstance
+areaattheevaluationresolutionisbelow322pixels;itisthereforeacategory-leveldiagnos-
+ticandisnotequivalenttothestandardinstance-levelCOCOAP . Becausethisassignment
+S
+usesacategorymean,Sm-APmayobscuresubstantialwithin-classscalevariationandis
+reportedonlyasacomplementarydiagnosticratherthanareplacementforinstance-level
+size-stratifiedAP.
+Baselinecomparisonsusematchedinputresolution,datapartitions,andevaluation
+scriptswheneversupportedbytheofficialimplementation. YOLO-familybaselinesuse
+officialmodeldefinitionsandacommon75-epochbudget;learningrate,batchsize,andaug-
+mentationstrengtharecheckedonthevalidationsplitattherecipelevelratherthanthrough
+anexhaustivearchitecture-specificsearch. DETR-familyandRF-DETR-familybaselines
+usethesamepost-processingsettingsasSpectral-DETR.Thepurposeofthesecomparisons
+istoreportperformanceunderthereproducedprotocol,nottoclaimuniversalsuperiority
+overeverypossiblebaselinetuning. Forthecontrolledmodulestudy,allrowssharethe
+RF-DETRbackbone,trainingbudget,datasplit,andpost-processing.
+4.3. ImplementationDetails
+All Spectral-DETR experiments use a DINOv2-Small ViT backbone [34] with win-
+dowed attention. Intermediate outputs from encoder blocks 2, 5, 8, and 11 form four
+taps,allprocessedbyDAFDbeforemulti-scaleprojectioninthefullmodel. Inputresolu-
+tionis560×560. TheRF-DETRBaseconfigurationhasthreedecoderlayers,300queries,
+andGroupDETR(G = 13). TrainingusesAdamW[65]withlearningrate10−4,weight
+decay 10−4, batch size 12, and at most 75 epochs on one RTX 3090 (24 GB). Validation
+AP@0.5:0.95selectsthecheckpoint,whichisreloadedandre-evaluatedbeforeresultsare
+written; the held-out test split is evaluated separately. Key module settings are DAFD
+α = 0.15, N = 3,targetgateratio0.8,andsparsityweight10−5;DQCDτ = 0.15,
+bands base
+λ = 0.08, K = 128, start epoch 8, and five-epoch warmup; SCU λ = 0.1 and
+DQCD SCU
+(c ,c ) = (−1.5,−4.2);andLUEwarmup15epochs,uncertaintycoefficient0.5,andlog-
+1 0
+variancebias −5.0. Thesearethefinalsettingsrequiredforreproduction; thecomplete
+preliminarysearchspaceisnotpartofthereportedmethod.
+Figure3providesdescriptivediagnosticsforthereliabilityinterpretationusedinthe
+experiments. ThelearnedDAFDgatesvaryacrossdegradationstrata,theDAFDstatistic
+producesadistributionofDQCDtemperatures,andthestratifiedresultssummarizewhere
+thefullreliabilitychainproduceslargervalidationgains.Theseobservationsdonotbythem-
+https://doi.org/10.3390/jimaging12090401
+
+--- PAGE 13 ---
+J.Imaging2026,12,401 13of24
+selvesestablishthatthegatemeanisacalibratedmeasureofphysicaldegradationseverity;
+thecontrolled-degradationandshuffled-gatetestsareusedforthatnarrowerquestion.
+Figure3.DescriptivereliabilitydiagnosticsofSpectral-DETR.(a)RepresentativeDAFDfrequency-
+domain gate activations from encoder tap 0. (b) Mean per-band gate values across validation
+imagesforbrightness,contrast,andblurdiagnostics;errorbarsdenotestandarddeviationsacross
+images.(c)Image-levelDQCDadaptive-temperaturedistributionsforcleananddegradedsubsets.
+Cleanimageshavenormalizedmeandegradationseverityatorbelowthe30thpercentile,whereas
+degradedimagesareatorabovethe70thpercentile;themiddle40%isexcluded.Thenormalized
+mean severity is the average of darkness, contrast, and blur severities. Violin widths indicate
+density,whiteboxesshowtheinterquartilerange,reddotsindicatemedians,andwhiskersextendto
+1.5timestheinterquartilerange;eachsubsetcontains92images.(d)Degradation-stratifiedchanges
+invalidationAP@0.5:0.95fordarkness,contrast,andblurseverity.Panels(a–c)providedescriptive
+mechanism-leveldiagnosticsandarenottreatedasground-truthdegradationcalibration.
+4.4. ComparisonwithPriorDetectors
+Baselinereproducibility.Weincludeafrequency-awareDETRbaselinetotestwhether
+theproposedreliabilitychainimprovesbeyondfrequencyfilteringalone. Thisbaseline
+denotes an RF-DETR variant augmented with a frequency-domain filtering block but
+withoutDQCD,SCU,orLUE,andisincludedtoisolatetheeffectoffrequency-domain
+featureenhancementfromthecompletereliabilitychain. TheMine-ObjectsandExDark
+frequency-awarebaselinesusethesameDINOv2-Smallbackbone,560×560inputreso-
+lution,75-epochbudget,andevaluationscriptsasSpectral-DETR.YOLOandRT-DETR
+baselinesusetheirofficialimplementationswiththesamedatapartitions,inputresolution,
+andevaluationmetricswhenevertheimplementationallows. AllMine-Objectsentriesare
+evaluatedontheidenticalheld-outtestsplit.
+https://doi.org/10.3390/jimaging12090401
+
+--- PAGE 14 ---
+J.Imaging2026,12,401 14of24
+4.4.1. Mine-ObjectsResults
+Table 1 reports comparisons on Mine-Objects. Spectral-DETR achieves the high-
+est AP@0.5 (0.917) and AP@0.5:0.95 (0.493) among the evaluated methods. Relative to
+YOLOv9m,themarginsare1.6AP@0.5points(0.917vs.0.901)and0.8AP@0.5:0.95points
+(0.493vs.0.485). TheAP@0.5:0.95marginismodest,sothemethod-specificevidenceiseval-
+uatedinthecontrolledRF-DETRablationreportedlater,whereallvariantssharethesame
+detector,trainingbudget,andevaluationprotocol. Ontheseven-categorysmall-footprint
+subset,Spectral-DETRobtains0.892Sm-AP@0.5and0.451Sm-AP@0.5:0.95.Sm-APdenotes
+APrestrictedtocategorieswhosemeaninstanceareaisbelow322pixels;itisdistinctfrom
+theinstance-levelCOCOAP usedintheablationstudy.
+S
+4.4.2. ExDarkLow-LightResults
+Table 2 shows ExDark results. Spectral-DETR exceeds the best listed baseline
+(YOLOv8l) by 5.1 AP@0.5 points (0.797 → 0.848) and 3.7 AP@0.5:0.95 points (0.534 →
+0.571). Onthecategory-conditionedsmall-footprintsubset,themarginsoverYOLOv8lare
+6.0Sm-AP@0.5pointsand2.7Sm-AP@0.5:0.95points. AllmodelsusethesameExDark
+partition, inputresolution(560×560), evaluationscript, andmetricdefinitions; model-
+specificoptimizationdetailsfollowthereproducibilityprotocoldescribedabove. These
+resultsreflectdataset-specificlow-lightevaluation. Themodule-specificcontributionis
+assessedseparatelythroughthecontrolledRF-DETRablations.
+Table 2. Comparison on ExDark. † Sm-AP is evaluated on categories with mean instance area
+<322pixels(Bottle,Cup,Cat,Dog)andisdistinctfrominstance-levelCOCOAP .Bold=best.
+S
+Overall Small-Object(†)
+Method Params(M) AP@0.5 AP@0.5:0.95 Sm-AP@0.5 Sm-AP@0.5:0.95
+YOLOv9s[27] 7.1 0.785 0.517 0.717 0.455
+YOLOv9m[27] 20.1 0.793 0.529 0.722 0.467
+YOLOv8m[26] 25.9 0.785 0.525 0.718 0.462
+YOLOv8l[26] 43.7 0.797 0.534 0.725 0.471
+RT-DETR[31] 32.0 0.763 0.495 0.700 0.445
+Frequency-awareDETRbaseline 30.8 0.774 0.508 0.711 0.450
+Spectral-DETR(Ours) 33.5 0.848 0.571 0.785 0.498
+Forthesmall-footprintdiagnostic,weusetheCOCOareathreshold(322pixels)only
+toselectcategorieswhosemeaninstanceareaattheevaluationresolutionfallsbelowthis
+value: Bottle,Cup,Cat,andDog. TheresultingSm-APiscategory-conditionedratherthan
+thestandardinstance-levelCOCOAP ;itcomparesperformanceonclassesdominatedby
+S
+smallimagefootprintsunderlowlight.
+4.4.3. Component-LevelAblationonExDark
+To test whether the Mine-Objects reliability gains transfer to a different low-light
+domain,werunthesamefive-rowcomponentablationonExDark(Table3).Allrowsusethe
+identicalDINOv2-Smallbackbone,560×560resolution,75-epochbudget,andevaluation
+protocol. OnExDarkvalidation,theRF-DETRbaselineachieves0.518AP@0.5:0.95and
+0.796AP@0.5;thefullSpectral-DETRreaches0.563AP@0.5:0.95and0.843AP@0.5.Theheld-
+outtestresult(0.571AP@0.5:0.95,Table2)iswithin0.008ofthevalidationvalue,consistent
+withtheMine-Objectsvalidation–testgap.
+https://doi.org/10.3390/jimaging12090401
+
+--- PAGE 15 ---
+J.Imaging2026,12,401 15of24
+Table 3. Component ablation on ExDark validation. All rows use the identical DINOv2-Small
+backbone,560×560resolution,75-epochbudget,andevaluationprotocol.
+Method AP@0.5:0.95 AP@0.5 AP
+S
+Baseline(RF-DETR) 0.518 0.796 0.450
++DAFD 0.540 0.822 0.462
++DQCD 0.522 0.800 0.451
++SCU+LUE 0.526 0.802 0.459
++Full(Spectral-DETR) 0.563 0.843 0.478
+DAFDprovidesthelargestsingle-modulegainonExDark(+0.022AP@0.5:0.95,+0.026
+AP@0.5),alargerabsoluteimprovementthanonMine-Objects(+0.004AP@0.5:0.95,+0.022
+AP@0.5). This is expected because low-light degradation—the primary challenge in
+ExDark—directly attenuates low-frequency structure, which is precisely what DAFD’s
+learnable multi-band frequency decomposition is designed to address. DQCD and
+SCU+LUEcontributesmallerbutconsistentgains,andthefullmodel’sAP@0.5:0.95im-
+provement(+0.045)exceedsthesumofindividualgains(+0.034)by+0.011,consistentwith
+themodestpositiveinteractionobservedonMine-Objects.
+4.4.4. ScienceDBMine-DomainResults
+OnScienceDB(Table4),Spectral-DETRachieves0.973AP@0.5and0.495AP@0.5:0.95.
+The 0.478-point gap between AP@0.5 and AP@0.5:0.95 indicates that many detections
+satisfy a coarse IoU threshold but lose credit as localization thresholds become stricter.
+The same qualitative gap is present for every listed detector, suggesting that it is not
+introduced solely by Spectral-DETR. Plausible contributors include small or elongated
+objects,visuallyambiguousboundaries,andannotationvariability. AP@0.75,whichwould
+provideanintermediateanchorbetweenmoderateandstricterlocalizationregimes,isnot
+separatelyreportedinthepresentanalysis.Wethereforeadoptaconservativeinterpretation:
+ScienceDBprovidesevidenceofstrongdetectionperformanceatthecoarseIoUthreshold
+(AP@0.5),togetherwithadditionalmine-domaincoverage,buttheresultsshouldnotbe
+interpreted as proof of zero-shot cross-mine generalization or as establishing a dataset-
+specificcausalmechanismforthelocalizationgap.
+Table4.ComparisonontheconvertedvalidationpartitionoftheCoalMineUndergroundDrilling
+SiteObjectDetectionDataset(ScienceDBV1).
+Model Backbone Params(M) AP@0.5 AP@0.5:0.95
+YOLOv8n CSPDarknet 3.0 0.951 0.438
+YOLOv8s CSPDarknet 11.2 0.958 0.447
+YOLOv8m CSPDarknet 25.9 0.962 0.452
+RT-DETR-R18 ResNet-18 20.0 0.955 0.441
+Frequency-awareDETRbaseline ViT-S 31.5 0.959 0.465
+Spectral-DETR(Ours) ViT-S 33.5 0.973 0.495
+Figure4summarizesthemainbenchmarkcomparisonsandselectedablationtrends.
+ItcomplementsthetabularresultsbyshowingtheoverallAP@0.5:0.95comparisonsacross
+Mine-Objects,ExDark,andScienceDB,thestage-wisereliability-chaingains,aDAFD-only
+band-countprobe,andametric-specificevidencesummary.
+https://doi.org/10.3390/jimaging12090401
+
+--- PAGE 16 ---
+J.Imaging2026,12,401 16of24
+Figure 4. Summary of quantitative results and ablations. (a) Main benchmark comparison in
+AP@0.5:0.95.(b)Stage-wiseablationofthereliabilitymodules.(c)DAFD-onlyband-countvalidation
+probe;threebandsprovidethebestmeasuredtrade-offandareusedbydefault.(d)Metric-specific
+validationgainsassociatedwithfeature,query,andlocalizationreliability.
+4.5. AblationStudies
+4.5.1. Stage-WiseAblation
+Table5reportstheprimaryvalidationablationusedtoisolatethereliabilitychain. All
+rowsusethesamedatasetsplit,trainingbudget,detectorbackbone,andstandardpost-
+processingprotocol. DAFDprovidesthelargestAP@0.5gainamongthesinglereliability
+modules(+0.022). DQCDandSCU+LUEprovidesmallerstandalonegainsbutimprove
+AP@0.5:0.95 and AP , consistent with effects on stricter localization and small-object
+S
+behavior. Thethreereliabilitystagestogetherreach0.486AP@0.5:0.95and0.913AP@0.5.
+Relativetothebaseline,theindividualAP@0.5:0.95gainssumto0.011,whereasthefull-
+modelgainis0.014;thispositive0.003interactionismodestandisreportedasevidenceof
+non-additivityratherthanproofofauniquecausalmechanism. Theheld-outtestresultof
+theselectedfullmodelisreportedseparatelyinTable1.
+Table5. PrimarycomponentablationontheMine-Objectsvalidationset. Eachrowusesthefixed
+datasetsplit,75-epochbudget,commonevaluationprotocol,andstandardpost-processing.Thefinal
+test-setresultisreportedseparatelyinTable1.
+Method AP@0.5:0.95 AP@0.5 APS APM Prec. Recall
+Baseline(RF-DETR) 0.472 0.883 0.290 0.518 0.905 0.815
++DAFD(Stage1) 0.476 0.905 0.297 0.523 0.907 0.825
++DQCD(Stage2) 0.474 0.886 0.292 0.520 0.904 0.817
++SCU+LUE(Stage3) 0.477 0.890 0.301 0.523 0.906 0.820
++Stage1+2 0.480 0.908 0.302 0.525 0.909 0.823
++Stage1+3 0.483 0.910 0.308 0.527 0.908 0.824
++Stage2+3 0.479 0.893 0.303 0.524 0.907 0.821
++Stage1+2+3(Full) 0.486 0.913 0.312 0.530 0.911 0.826
+Full,lrdropatepoch40(schedulecontrol) 0.485 0.910 0.310 0.527 0.908 0.823
+https://doi.org/10.3390/jimaging12090401
+
+--- PAGE 17 ---
+J.Imaging2026,12,401 17of24
+4.5.2. DAFD-to-DQCDCouplingControls
+The DAFD gate statistic directly modulates DQCD temperature via Equation (12).
+Totestwhetherimage-alignedgatingcontributesbeyondaddingbothmodulesindepen-
+dently,wecomparefourcouplingmodesunderanotherwiseidenticalfullSpectral-DETR
+configuration(Table6). Adaptive usesDAFD’sper-imagegatestatistics(ourdesign). Fixed
+replacestheper-imagestatisticwithaconstantτ =0.15(noimage-levelsignal). Shuffled
+randomly permutes the image→gate mapping within each mini-batch, preserving the
+marginaldistributionbutbreakingimagealignment. Randomdrawsgatevaluesuniformly
+fromtheobservedrange.
+Adaptive gating achieves 0.485 AP@0.5:0.95. Relative to adaptive, the fixed mode
+reducesAP@0.5:0.95by0.002points,theshuffledmodeby0.002points,andtherandom
+modeby0.004points. Thesesmallbutconsistentdifferencesindicatethatimage-aligned
+gating provides a modest benefit beyond simply adding both modules independently.
+Theshuffledmodeperformingsimilarlytothefixedmodesuggeststhatthegatedistribu-
+tionshape,ratherthanitsper-imagealignment,accountsforpartofthebenefit;however,
+thefurtherdegradationunderrandomgatingconfirmsthatmatchingtheobservedgate
+rangeisalsonecessary.
+Table 6. DAFD-to-DQCD coupling controls on Mine-Objects validation. All rows use the full
+Spectral-DETRconfiguration;onlythetemperaturemodulationmodevaries.
+GateMode AP@0.5:0.95 AP@0.5 AP
+S
+Adaptive(ourdesign) 0.485 0.913 0.310
+Fixedtemperature 0.483 0.910 0.309
+Shuffledgate 0.483 0.911 0.308
+Randomgate 0.481 0.909 0.305
+4.5.3. DAFDBand-CountAnalysis
+DAFDdecomposesfeaturesintoN learnableGaussianfrequencybands. Table7
+bands
+probes N ∈ {1,...,5} using DAFD-only models with all other modules disabled.
+bands
+Three bands provide the best measured trade-off (0.475 AP@0.5:0.95), while additional
+bandsshowdiminishingreturns. Thispatternisconsistentwiththephysicalstructureof
+undergrounddegradation: low-frequencyilluminationloss,mid-frequencyblur,andhigh-
+frequencydustnoiseeachbenefitfromadedicatedband,butfurthersubdivisionlacksa
+cleardegradationcounterpartonMine-Objects.
+Table7.DAFDband-countsensitivityonMine-Objectsvalidation.AllmodelsuseDAFD-onlywith
+otherreliabilitymodulesdisabled.
+Bands AP@0.5:0.95 AP@0.5 AP
+S
+1 0.472 0.898 0.291
+2 0.474 0.901 0.293
+3(default) 0.475 0.904 0.295
+4 0.475 0.903 0.294
+5 0.474 0.902 0.293
+4.5.4. SCUCoefficientSensitivity
+SCUmapsgeometricsaliencetoalog-variancecalibrationtargetviaalineartransform
+withslopec andcentrec (Equation(26)). Table8perturbseachcoefficientindividually
+1 0
+while holding the other at its default value (c = −1.5, c = −4.2). The resulting AP
+1 0
+variationis≤0.001AP@0.5:0.95acrossallfivesettings,indicatingthatSCUactsasasoft
+priorwhoseexactcoefficientvaluesarenotcriticalfordownstreamperformance. Thisisa
+https://doi.org/10.3390/jimaging12090401
+
+--- PAGE 18 ---
+J.Imaging2026,12,401 18of24
+desirableproperty:thegeometricpriorconstrainsthelearningproblemwithoutintroducing
+abrittlehyperparameter.
+Table8.SCUcoefficientsensitivityonMine-Objectsvalidation.Defaultparametersarec =−1.5,
+1
+c =−4.2.
+0
+Setting AP@0.5:0.95 AP@0.5 AP
+S
+Default(c =−1.5,c =−4.2) 0.476 0.889 0.300
+1 0
+c =−1.0 0.476 0.889 0.299
+1
+c =−2.0 0.475 0.888 0.300
+1
+c =−3.8 0.476 0.890 0.300
+0
+c =−4.6 0.475 0.888 0.299
+0
+4.5.5. Degradation-StratifiedAnalysis
+Westratifythe308-imageMine-Objectsvalidationsetindependentlybyimage-level
+brightness,contrast,andblurseverityusingpercentile-basedterciles.Table9reportsthefull
+model’sAPdifferencerelativetotheRF-DETRbaselinewithineachstratum. Thedifference
+increases from +0.004 in the sharp subset to +0.017 in the severe-blur subset, and from
++0.003inthebrightsubsetto+0.013inthedarkestsubset. Thesedescriptiveresultsare
+consistentwithdegradation-dependentgains,althoughoverlappingdegradationattributes
+andlimitedstratumsizesdonotestablishindependentcausaleffects.
+Table9.Descriptivedegradation-stratified∆AP@0.5:0.95overtheRF-DETRbaselineonthe308-image
+Mine-Objectsvalidationset.Tercilesareconstructedindependentlyforeachdegradationattribute.
+DegradationType LowSeverity MidSeverity HighSeverity
+Brightness(dark) +0.003 +0.008 +0.013
+Contrast +0.004 +0.007 +0.010
+Blur +0.004 +0.009 +0.017
+4.5.6. ReliabilityEvidenceAcrossStages
+Table10mapseachreliabilitystagetothemetricsusedtosupportitsmechanism-level
+interpretation,linkingmoduledesigntoquantitativeimprovement.
+Table10.Reliabilityevidenceacrossthethreestages.Eachstageislinkedtotheablationmetricthat
+bestcapturesitsmechanism.
+Stage EvidenceMetric ObservedEvidence Source
+DAFD(Feature) AP@0.5(standalone) 0.883→0.905(+0.022) Table5
+Degradation-stratified∆AP(blur) +0.017(highseverity) Table9
+Gateactivationheatmaps degradation-dependent Figure3a,b
+DQCD(Query) AP@0.5:0.95(standalone) 0.472→0.474(+0.002) Table5
+Stage1+2combinedRecall 0.815→0.823(+0.008) Table5
+DQCDtemperature(τ)separation clean≈0.20,degraded≈0.12 Figure3c
+SCU+LUE(Local.) AP (standalone) 0.290→0.301(+0.011) Table5
+S
+AP@0.5:0.95(standalone) 0.472→0.477(+0.005) Table5
+Error-uncertaintycorrelation 0.60(moderatePearson) validationdiagnostics
+For DAFD, the standalone AP@0.5 gain (+0.022) and the larger descriptive gains
+inhigh-blur(+0.017)andhigh-darkness(+0.013)strataareconsistentwithdegradation-
+dependent feature processing, but the strata overlap and do not establish independent
+causaleffects. ForDQCD,thestandaloneAP@0.5:0.95gainis+0.002andtheStage1+2re-
+callchangeis+0.008.Thecouplingcontrols(Table6)showthatadaptivegatingoutperforms
+https://doi.org/10.3390/jimaging12090401
+
+--- PAGE 19 ---
+J.Imaging2026,12,401 19of24
+fixed (−0.002), shuffled (−0.002), and random (−0.004) temperature modes, providing
+evidencethatimage-alignedDAFD-to-DQCDcouplingcontributesbeyondindependent
+moduleoperation. ForSCU+LUE,thestandaloneAP gainis+0.011andAP@0.5:0.95gain
+S
+is+0.005. ThePearsoncorrelationof0.60(Spearman0.58)betweenpredictedlog-variance
+and localization error is moderate; it is retained as supporting evidence that predicted
+log-variancerankspartoflocalizationdifficulty,notasconclusiveuncertaintycalibration.
+TheSCUcoefficientsensitivity(Table8)shows≤0.001AP@0.5:0.95variationacrosssettings,
+confirmingthatthegeometricpriorisasoftregularizerratherthanabrittlehyperparameter.
+4.5.7. QualitativeExamples
+Figure5showsqualitativedetectionexamplesunderundergroundmineandlow-light
+conditions. The examples illustrate that Spectral-DETR preserves detections for small
+signs,lamps,personnel,machinery,andlow-contrastforegroundobjectsunderuneven
+illuminationandseveredarkness.
+Figure5.Matchedqualitativecomparisononidenticaldegradedinputs.Ineachcolumn,thetoprow
+showstheinputimage,themiddlerowshowstheRF-DETRbaselineprediction,andthebottomrow
+showstheSpectral-DETRprediction;therefore,thebaselineandproposedmethodarecompared
+onexactlythesameimage. ThefirsttwocolumnsshowMine-Objectsscenesunderglare,uneven
+illumination,andextremedarkness,whilethethirdcolumnshowsanExDarklow-lightvehiclescene.
+Theseexamplesareillustrativeandarenotusedasquantitativeevidence.
+4.6. EfficiencyAnalysis
+Table 11 reports parameters, FLOPs, FPS, and validation AP under the standard
+single-scaleprotocolwithouttest-timeaugmentation. FPSismeasuredwithbatchsize1
+at560×560onanRTX3090,averagedover100runsafter20warm-upiterations. DAFD
+adds0.8Mparametersandreducesthroughputby2.7FPS,primarilybecauseofFFT/IFFT
+operations. DQCDandSCUareloss-onlycomponentsandaddnoinferenceoperations.
+TheLUEheadadds0.5Mparametersand1.1FPSofmeasuredoverheadwhenretained.
+The full model runs at 17.5 FPS, an 18% reduction from the RF-DETR baseline, while
+improvingvalidationAP@0.5:0.95from0.472to0.486.
+https://doi.org/10.3390/jimaging12090401
+
+--- PAGE 20 ---
+J.Imaging2026,12,401 20of24
+Table11.Efficiencyandcomponent-wisevalidationAPonMine-Objects.APusesthefixedvalidation
+protocol;FPSismeasuredwithbatchsize1at560×560onanRTX3090.Test-setaccuracyisreported
+separatelyinTable1.
+Method Params(M) FLOPs(G) FPS AP@0.5:0.95
+YOLOv8m 25.9 76.0 120.5 0.481
+Baseline(RF-DETR) 32.2 116.7 21.3 0.472
++DAFD(Stage1) 33.0 121.1 18.6 0.476
++DQCD(Stage2) 32.2 116.7 21.3 0.474
++SCU+LUE(Stage3) 32.7 117.8 20.2 0.477
+Full 33.5 122.2 17.5 0.486
+5. Discussion
+5.1. WhyFrequencyDecompositionWorksforUndergroundScenes
+The effectiveness of DAFD is explained by the physical structure of underground
+degradation. Unlikegenericimagecorruption,minedegradationexhibitsstrongfrequency-
+bandspecificity: illuminationlossispredominantlylow-frequency,blurismid-frequency,
+and dust noise is high-frequency. A single global transformation cannot address these
+simultaneously. DAFD’s learnable multi-band design allows each band to develop a
+specializedgatingpolicytunedtoitsdegradationmode,whilecross-bandfusionenables
+compensation (e.g., when high-frequency suppression removes edge information, mid-
+frequencybandscanpartiallyrecoverit). Theobservedgatebehavioremergeswithout
+explicitband-levelsupervisionandsupportstheclaimthatdetectionlossgradientsprovide
+sufficienttasksignalforfrequencyallocation(Figure3).
+5.2. InteractionBetweenModules
+Thethreemodulesactatdifferentlocationsinthedetector. DAFDoperatesoninter-
+mediatebackbonetapsbeforemulti-scaleprojection;DQCDoperatesondecoderquery
+embeddings;andSCU+LUEoperatesonmatchedboxpredictions. Pairwisecombinations
+improveovertheircorrespondingsingle-modulerows,andthefullAP@0.5:0.95gainis
+0.003largerthanthesumofindividualgains. Thisisasmallpositiveinteraction,sowe
+avoiddescribingthemodulesasstronglysynergisticonthatresultalone. Thedirectpath-
+wayfromDAFDgatestatisticstoDQCDtemperature(Equation(12))istheclearestexplicit
+cross-stageinterface.Fixed,shuffled,andrandom-gatecontrolsarenecessarytodistinguish
+image-alignedcouplingfromgenericregularizationoraddedcapacity.
+5.3. LimitationsandFutureWork
+Thefirstlimitationiscomputationalcost. DAFD’sFFT/IFFToperationsaccountfor
+mostofthethroughputreductionfrom21.3to17.5FPS.Theresultingmodelisusablefor
+moderate-ratemonitoringbutdoesnotmeeta25–30FPSreal-timetargetonthereported
+RTX3090protocol. DQCDandSCUaretraining-onlyobjectives,whereastheLUEvariance
+headcanberetainedfordiagnosticsorremovedwhenuncertaintyoutputsareunnecessary.
+TheimplementationalsosupportsDAFDonselectedencodertaps,allowinganaccuracy–
+latencytrade-offwithoutrelabelingthosetapsasP3/P4/P5pyramidlevels. Tap-specific
+accuracyandlatency,andacontrolledcomparisonwithsimilarlysizedspatialconvolutions,
+arerequiredbeforeclaimingthatFFTprocessingisthemostefficientchoice.
+Thesecondlimitationconcernsdesignsensitivityandgenerality. Threebandsgive
+the best result in the current DAFD-only probe, but the band number is globally fixed
+anddoesnotadaptperimage. Likewise,theSCUslopeandcenterencodeageometric
+priorwhoseoptimalitymaydependontheobject-sizedistribution. Thefullframeworkis
+evaluatedwithaDINOv2-Smallbackbone;althoughDAFDacceptsgenericfeaturetensors,
+https://doi.org/10.3390/jimaging12090401
+
+--- PAGE 21 ---
+J.Imaging2026,12,401 21of24
+experimentswithCNNorhierarchicalTransformerbackbonesareneededbeforeclaiming
+backbone-independentgains. These limitationsmotivate dynamicband allocationand
+broaderbackbonevalidation,butaddinganotherunvalidatednetworkcomponentinthe
+presentrevisionwouldobscureratherthanstrengthenthecurrentcontribution.
+Thethirdlimitationisstatistical. Mine-Objectsisdeliberatelycompactbecauseacquisi-
+tionsequencesareseparatedbeforeframeselectiontopreventadjacent-frameleakage. This
+strictsplitimprovestestintegritybutdoesnotremovethehighervarianceandoverfitting
+riskassociatedwith3081imagesandrareclasses. Wethereforeselectcheckpointsonly
+onthevalidationsplit,reservethetestsplitforfinalcomparison,andavoidtreatingthe
+datasetasevidenceofuniversalmine-domaingeneralization. Themoderateuncertainty–
+errorcorrelationanddescriptivedegradationstrataaresupportingdiagnostics;bootstrap
+intervals,rank-basedcalibrationanalysis,andacompactexternal-datasetcomponentstudy
+arenecessarycomplementarychecks. Finally,DAFD-to-DQCDcouplingcurrentlyendsat
+temperaturemodulation;extendingreliabilitytoHungarianmatchingremainsfuturework.
+6. Conclusions
+WehavepresentedSpectral-DETR,adetector-internalreliabilityframeworkforde-
+gradedundergrounddetection. ThemethodaddressesthreelinkedfailurepointsinDETR-
+styledetectors:DAFDimprovesfrequency-awarefeaturereliability,DQCDimprovesquery
+separabilityusingDAFD-modulatedtemperature,andSCU+LUEimprovessmall/medium-
+objectlocalizationthroughsalience-calibratedprecisionweighting. Acrossthein-domain
+mine benchmark, an additional mine-domain benchmark, and ExDark, Spectral-DETR
+improvesbothAP@0.5andAP@0.5:0.95. InthecontrolledRF-DETRvalidationcomparison,
+the three reliability stages improve AP@0.5:0.95 from 0.472 to 0.486. The framework is
+end-to-endtrainable,requiresnoexternalenhancementnetwork,andkeepsDQCDand
+SCUastraining-onlycomponents.
+AuthorContributions:Conceptualization,Y.S.andJ.Y.;methodology,Y.S.;software,Y.S.;validation,Y.S.,
+L.D.andX.X.;formalanalysis,Y.S.;investigation,Y.S.;resources,J.Y.;datacuration,Y.S.;writing—original
+draftpreparation,Y.S.;writing—reviewandediting,J.Y.,L.D.andX.X.;visualization,Y.S.;supervision,J.Y.;
+projectadministration,J.Y.Allauthorshavereadandagreedtothepublishedversionofthemanuscript.
+Funding:Thisresearchreceivednoexternalfunding
+InstitutionalReviewBoardStatement:Notapplicable.
+InformedConsentStatement:Notapplicable.
+DataAvailabilityStatement:Theself-builtMine-Objectsdatasetisavailableathttps://github.com/
+songyuexin666-wq/mine-datasets(accessedon19August2026).TheCoalMineUndergroundDrillingSite
+ObjectDetectionDataset(ScienceDBV1)isavailableathttps://doi.org/10.57760/sciencedb.j00001.01020
+underCCBY4.0(accessedon19August2026). ExDarkisavailableathttps://github.com/cs-chan/
+Exclusively-Dark-Image-Dataset(accessedon19August2026).Thecodeisavailableathttps://github.
+com/songyuexin666-wq/Spectral-DETR(accessedon19August2026).
+ConflictsofInterest:Theauthorsdeclarenoconflictsofinterest.
+Abbreviations
+Thefollowingabbreviationsareusedinthismanuscript:
+AP AveragePrecision
+DAFD Degradation-AwareFrequencyDecomposition
+DETR DetectionTransformer
+DQCD Degradation-adaptiveQueryContrastiveDenoising
+https://doi.org/10.3390/jimaging12090401
+
+--- PAGE 22 ---
+J.Imaging2026,12,401 22of24
+FFT FastFourierTransform
+GIoU GeneralizedIntersectionoverUnion
+LUE LearnedUncertaintyEstimation
+SCU Salience-CalibratedUncertainty
+References
+1. Hendrycks, D.; Dietterich, T. Benchmarking Neural Network Robustness to Common Corruptions and Perturbations. In
+ProceedingsoftheInternationalConferenceonLearningRepresentations(ICLR),NewOrleans,LA,USA,6–9May2019.
+2. Chen,C.;Chen,Q.;Xu,J.;Koltun,V. LearningtoSeeintheDark. InProceedingsoftheIEEE/CVFConferenceonComputer
+VisionandPatternRecognition(CVPR),SaltLakeCity,UT,USA,18–22June2018;pp.3291–3300.
+3. Chen,Y.; Li,W.; Sakaridis,C.; Dai,D.; VanGool,L. DomainAdaptiveFasterR-CNNforObjectDetectionintheWild. In
+ProceedingsoftheIEEE/CVFConferenceonComputerVisionandPatternRecognition(CVPR),SaltLakeCity,UT,USA,18–22
+June2018;pp.3339–3348.
+4. Carion,N.;Massa,F.;Synnaeve,G.;Usunier,N.;Kirillov,A.;Zagoruyko,S. End-to-EndObjectDetectionwithTransformers. In
+ProceedingsoftheEuropeanConferenceonComputerVision(ECCV),Online,23–28August2020;pp.213–229.[CrossRef]
+5. Rezatofighi,H.;Tsoi,N.;Gwak,J.;Sadeghian,A.;Reid,I.;Savarese,S. GeneralizedIntersectionoverUnion:AMetricandALoss
+forBoundingBoxRegression. InProceedingsoftheIEEE/CVFConferenceonComputerVisionandPatternRecognition(CVPR),
+LongBeach,CA,USA,16–20June2019;pp.658–666.
+6. Loh,Y.P.;Chan,C.S. GettingtoKnowLow-LightImageswiththeExclusivelyDarkDataset. Comput.Vis.ImageUnderst.2019,
+178,30–42.[CrossRef]
+7. Wang,Y.;Zhang,X.;Yang,T.;Sun,J. AnchorDETR:QueryDesignforTransformer-BasedDetector. InProceedingsoftheAAAI
+ConferenceonArtificialIntelligence,Online,22February–1March2022;Volume36,pp.2567–2575.
+8. Pu,Y.;Wu,Y.;Zhang,R.;Wu,Z.;Chen,C.;Peng,Y.;Su,J. Rank-DETRforHighQualityObjectDetection. InProceedingsofthe
+AdvancesinNeuralInformationProcessingSystems(NeurIPS),NewOrleans,LA,USA,10–16December2023.
+9. Kendall,A.;Gal,Y. WhatUncertaintiesDoWeNeedinBayesianDeepLearningforComputerVision? InProceedingsofthe
+AdvancesinNeuralInformationProcessingSystems(NeurIPS),LongBeach,CA,USA,4–9December2017.
+10. He,Y.;Zhu,C.;Wang,J.;Savvides,M.;Zhang,X. BoundingBoxRegressionwithUncertaintyforAccurateObjectDetection. In
+ProceedingsoftheIEEE/CVFConferenceonComputerVisionandPatternRecognition(CVPR),LongBeach,CA,USA,16–20
+June2019;pp.2888–2897.
+11. Xu,K.;Qin,M.;Sun,F.;Wang,Y.;Chen,Y.K.;Ren,F. LearningintheFrequencyDomain. InProceedingsoftheIEEE/CVF
+ConferenceonComputerVisionandPatternRecognition(CVPR),Online,14–19June2020;pp.1740–1749.
+12. Yu,Z.;Jha,D.K.;Yuan,Z.;Ray,A.Frequency-DomainLearningforVolumetric-Based3DDataPerception.arXiv2023,arXiv:2302.08595.
+13. Zhu,X.;Su,W.;Lu,L.;Li,B.;Wang,X.;Dai,J. DeformableDETR:DeformableTransformersforEnd-to-EndObjectDetection. In
+ProceedingsoftheInternationalConferenceonLearningRepresentations(ICLR),Online,3–7May2021.
+14. Liu,S.;Li,F.;Zhang,H.;Yang,X.;Qi,X.;Su,H.;Zhu,J.;Zhang,L. DAB-DETR:DynamicAnchorBoxesAreBetterQueriesfor
+DETR. InProceedingsoftheInternationalConferenceonLearningRepresentations(ICLR),Online,25–29April2022.
+15. Li,X.;Wang,W.;Wu,L.;Chen,S.;Hu,X.;Li,J.;Tang,J.;Yang,J. GeneralizedFocalLoss:LearningQualifiedandDistributed
+BoundingBoxesforDenseObjectDetection. InProceedingsoftheAdvancesinNeuralInformationProcessingSystems(NeurIPS),
+Online,6–12December2020.
+16. Roboflow. RF-DETR.2025.Availableonline: https://github.com/roboflow/rf-detr(accessedon19August2026).
+17. Girshick,R. FastR-CNN. InProceedingsoftheIEEEInternationalConferenceonComputerVision(ICCV),Santiago,Chile,
+13–16December2015;pp.1440–1448.
+18. Ren,S.;He,K.;Girshick,R.;Sun,J. FasterR-CNN:TowardsReal-TimeObjectDetectionwithRegionProposalNetworks. In
+ProceedingsoftheAdvancesinNeuralInformationProcessingSystems(NeurIPS),Montreal,QC,Canada,7–12December2015.
+19. Liu,W.;Anguelov,D.;Erhan,D.;Szegedy,C.;Reed,S.;Fu,C.Y.;Berg,A.C. SSD:SingleShotMultiBoxDetector. InProceedingsof
+theEuropeanConferenceonComputerVision(ECCV),Amsterdam,TheNetherlands,8–16October2016;pp.21–37.[CrossRef]
+20. Lin,T.Y.;Goyal,P.;Girshick,R.;He,K.;Dollár,P. FocalLossforDenseObjectDetection. InProceedingsoftheIEEEInternational
+ConferenceonComputerVision(ICCV),Venice,Italy,22–29October2017;pp.2980–2988.
+21. Tian,Z.;Shen,C.;Chen,H.;He,T. FCOS:FullyConvolutionalOne-StageObjectDetection. InProceedingsoftheIEEE/CVF
+InternationalConferenceonComputerVision(ICCV),Seoul,RepublicofKorea,27October–2November2019;pp.9627–9636.
+22. Tan,M.;Pang,R.;Le,Q.V. EfficientDet:ScalableandEfficientObjectDetection. InProceedingsoftheIEEE/CVFConferenceon
+ComputerVisionandPatternRecognition(CVPR),Online,14–19June2020;pp.10781–10790.
+23. Redmon,J.;Farhadi,A. YOLOv3:AnIncrementalImprovement. arXiv2018,arXiv:1804.02767.
+24. Bochkovskiy,A.;Wang,C.Y.;Liao,H.Y.M.YOLOv4:OptimalSpeedandAccuracyofObjectDetection.arXiv2020,arXiv:2004.10934.
+https://doi.org/10.3390/jimaging12090401
+
+--- PAGE 23 ---
+J.Imaging2026,12,401 23of24
+25. Wang,C.Y.;Bochkovskiy,A.;Liao,H.Y.M. YOLOv7:TrainableBag-of-FreebiesSetsNewState-of-the-ArtforReal-TimeObject
+Detectors. InProceedingsoftheIEEE/CVFConferenceonComputerVisionandPatternRecognition(CVPR),Vancouver,BC,
+Canada,18–22June2023;pp.7464–7475.
+26. Jocher,G.;Chaurasia,A.;Qiu,J. YOLOv8.2023.Availableonline: https://github.com/ultralytics/ultralytics(accessedon19
+August2026).
+27. Wang,C.Y.;Yeh,I.H.;Liao,H.Y.M. YOLOv9: LearningWhatYouWanttoLearnUsingProgrammableGradientInformation.
+arXiv2024,arXiv:2402.13616.
+28. Li,F.;Zhang,H.;Liu,S.;Guo,J.;Ni,L.M.;Zhang,L. DN-DETR:AccelerateDETRTrainingbyIntroducingQueryDeNoising. In
+ProceedingsoftheIEEE/CVFConferenceonComputerVisionandPatternRecognition(CVPR),NewOrleans,LA,USA,19–24
+June2022;pp.13619–13627.
+29. Zhang,H.;Li,F.;Liu,S.;Zhang,L.;Su,H.;Zhu,J.;Ni,L.M.;Shum,H.Y. DINO:DETRwithImprovedDeNoisingAnchorBoxes
+forEnd-to-EndObjectDetection. InProceedingsoftheInternationalConferenceonLearningRepresentations(ICLR),Kigali,
+Rwanda,1–5May2023.
+30. Zhao,Y.;Lv,W.;Xu,S.;Wei,J.;Wang,G.;Dang,Q.;Liu,Y.;Chen,J. DETRsBeatYOLOsonReal-TimeObjectDetection. In
+ProceedingsoftheIEEE/CVFConferenceonComputerVisionandPatternRecognition(CVPR),Seattle,WA,USA,17–21June
+2024;pp.16965–16974.
+31. Lv,W.;Zhao,Y.;Xu,S.;Wei,J.;Wang,G.;Cui,C.;Du,Y.;Dang,Q.;Liu,Y. RT-DETRv2:ImprovedBaselinewithBag-of-Freebies
+forReal-TimeDetectionTransformer. arXiv2024,arXiv:2407.17140.
+32. Zong,Z.;Song,G.;Liu,Y.DETRswithCollaborativeHybridAssignmentsTraining. InProceedingsoftheIEEE/CVFInternational
+ConferenceonComputerVision(ICCV),Paris,France,2–6October2023;pp.6748–6758.
+33. Jia,D.;Yuan,Y.;He,H.;Wu,X.;Yu,H.;Lin,W.;Sun,L.;Zhang,C.;Hu,H. DETRswithHybridMatching. InProceedings
+oftheIEEE/CVFConferenceonComputerVisionandPatternRecognition(CVPR),Vancouver,BC,Canada,18–22June2023;
+pp.19702–19712.
+34. Oquab,M.;Darcet,T.;Moutakanni,T.;Vo,H.;Szafraniec,M.;Khalidov,V.;Fernandez,P.;Haziza,D.;Massa,F.;El-Nouby,A.;etal.
+DINOv2:LearningRobustVisualFeatureswithoutSupervision. Trans.Mach.Learn.Res.2024.[CrossRef]
+35. Dosovitskiy,A.;Beyer,L.;Kolesnikov,A.;Weissenborn,D.;Zhai,X.;Unterthiner,T.;Dehghani,M.;Minderer,M.;Heigold,G.;
+Gelly,S.;etal. AnImageIsWorth16x16Words:TransformersforImageRecognitionatScale. InProceedingsoftheInternational
+ConferenceonLearningRepresentations(ICLR),Online,3–7May2021.
+36. Liu,Z.;Lin,Y.;Cao,Y.;Hu,H.;Wei,Y.;Zhang,Z.;Lin,S.;Guo,B. SwinTransformer: HierarchicalVisionTransformerUsing
+ShiftedWindows. InProceedingsoftheIEEE/CVFInternationalConferenceonComputerVision(ICCV),Online,11–17October
+2021;pp.10012–10022.
+37. Lin,T.Y.;Dollár,P.;Girshick,R.;He,K.;Hariharan,B.;Belongie,S.FeaturePyramidNetworksforObjectDetection. InProceedings
+of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), Honolulu, HI, USA, 21–26 July 2017;
+pp.2117–2125.
+38. Wei,C.;Wang,W.;Yang,W.;Liu,J. DeepRetinexDecompositionforLow-LightEnhancement. InProceedingsoftheBritish
+MachineVisionConference(BMVC),NewcastleuponTyne,UK,3–6September2018.
+39. Jiang,Y.;Gong,X.;Liu,D.;Cheng,Y.;Fang,C.;Shen,X.;Yang,J.;Zhou,P.;Wang,Z. EnlightenGAN:DeepLightEnhancement
+withoutPairedSupervision. IEEETrans.ImageProcess.2021,30,2340–2349.[CrossRef][PubMed]
+40. Guo,C.;Li,C.;Guo,J.;Loy,C.C.;Hou,J.;Kwong,S.;Cong,R. Zero-ReferenceDeepCurveEstimationforLow-LightImage
+Enhancement. InProceedingsoftheIEEE/CVFConferenceonComputerVisionandPatternRecognition(CVPR),Online,14–19
+June2020;pp.1780–1789.
+41. Hu,J.;Shen,L.;Sun,G. Squeeze-and-ExcitationNetworks. InProceedingsoftheIEEE/CVFConferenceonComputerVisionand
+PatternRecognition(CVPR),SaltLakeCity,UT,USA,18–22June2018;pp.7132–7141.
+42. Woo,S.;Park,J.;Lee,J.Y.;Kweon,I.S.CBAM:ConvolutionalBlockAttentionModule. InProceedingsoftheEuropeanConference
+onComputerVision(ECCV),Munich,Germany,8–14September2018;pp.3–19.
+43. Qin,Z.;Zhang,P.;Wu,F.;Li,X. FcaNet:FrequencyChannelAttentionNetworks. InProceedingsoftheIEEE/CVFInternational
+ConferenceonComputerVision(ICCV),Online,11–17October2021;pp.783–792.
+44. Xue,R.;Duan,J.;Du,Z. MPE-DETR:AMultiscalePyramidEnhancementNetworkforObjectDetectioninLow-LightImages.
+ImageVis.Comput.2024,150,105202.[CrossRef]
+45. Liu,J.w.;Yang,D.;Feng,T.w.;Fu,J.j. MDFD2-DETR:AReal-TimeComplexRoadObjectDetectionModelBasedonMulti-Domain
+FeatureDecompositionandDe-Redundancy. IEEETrans.Intell.Veh.2025,10,4343–4359.[CrossRef]
+46. Li,Y.;Shen,L. AFrequencyDomain-EnhancedTransformerforNighttimeObjectDetection. Sensors2025,25,3673.[CrossRef]
+[PubMed]
+47. Li,Y.;Song,C.;Xie,C. FFE-DETR:Frequency-AwareFeatureEnhancementforObjectDetectioninLow-LightScenarios. IEEE
+SignalProcess.Lett.2026,33,678–682.[CrossRef]
+https://doi.org/10.3390/jimaging12090401
+
+--- PAGE 24 ---
+J.Imaging2026,12,401 24of24
+48. Zhou,W.;Zhu,Y.;Lei,J.;Wan,J.;Yu,L. CCAFNet:CrossflowandCross-ScaleAdaptiveFusionNetworkforDetectingSalient
+ObjectsinRGB-DImages. IEEETrans.Multimed.2021,24,2192–2204.[CrossRef]
+49. Zhou,W.;Guo,Q.;Lei,J.;Yu,L.;Hwang,J.N. IRFR-Net:InteractiveRecursiveFeature-ReshapingNetworkforDetectingSalient
+ObjectsinRGB-DImages. IEEETrans.NeuralNetw.Learn.Syst.2025,36,4132–4144.[CrossRef][PubMed]
+50. Zhou,W.;Guo,Q.;Lei,J.;Yu,L.;Hwang,J.N. ECFFNet:EffectiveandConsistentFeatureFusionNetworkforRGB-TSalient
+ObjectDetection. IEEETrans.CircuitsSyst.VideoTechnol.2022,32,1224–1235.[CrossRef]
+51. Zhou, W.; Zhu, Y.; Lei, J.; Yang, R.; Yu, L. LSNet: Lightweight Spatial Boosting Network for Detecting Salient Objects in
+RGB-ThermalImages. IEEETrans.ImageProcess.2023,32,1329–1340.[CrossRef][PubMed]
+52. Zhou,W.;Sun,F.;Jiang,Q.;Cong,R.;Hwang,J.N. WaveNet:WaveletNetworkWithKnowledgeDistillationforRGB-TSalient
+ObjectDetection. IEEETrans.ImageProcess.2023,32,3027–3039.[CrossRef][PubMed]
+53. Zhou,W.;Wu,Y.;Qiang,F.;Yan,W. LightweightScopeIntegrationNetworkforRailSurfaceDefectDetection. IEEETrans.Big
+Data2026,12,321–329.[CrossRef]
+54. Zhou,W.;Ju,Z.;Cong,R.;Yan,W. RCNet:Dual-NetworkResonanceCollaborationviaMutualLearningforRGB-DRoadDefect
+Detection. IEEETrans.CircuitsSyst.VideoTechnol.2026,36,3989–4003.[CrossRef]
+55. Zhou,W.;Ju,Z.;Liao,L.;Cong,R. PriorsMeetHindsight:AnAsymmetricCollaborativeEvolutionFrameworkforRGB-DRoad
+DefectDetection. IEEETrans.CircuitsSyst.VideoTechnol.2026, earlyaccess.[CrossRef]
+56. Zhou,W.;Tang,B.;Cong,R.;Jiang,Q. Turbidity–SimilarityDecoupling:Feature-ConsistentMutualLearningforUnderwater
+SalientObjectDetection. IEEETrans.ImageProcess.2026,35,495–510.[CrossRef][PubMed]
+57. Zhou,W.;Tang,B.;Dong,X.;Qiang,F. PromptThenRefine: Prompt-FreeSAM-EnhancedCollaborativeLearningNetwork
+forDetectingSalientObjectsinUnderwaterImages. IEEETrans.NeuralNetw.Learn.Syst.2026, 1–15, earlyaccess.[CrossRef]
+[PubMed]
+58. He, K.; Fan, H.; Wu, Y.; Xie, S.; Girshick, R. Momentum Contrast for Unsupervised Visual Representation Learning. In
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), Online, 14–19 June 2020;
+pp.9729–9738.
+59. Xie,E.;Ding,J.;Wang,W.;Zhan,X.;Xu,H.;Sun,P.;Li,Z.;Luo,P.DetCo:UnsupervisedContrastiveLearningforObjectDetection.
+IEEETrans.CircuitsSyst.VideoTechnol.2022,32,7541–7551.
+60. Chen,T.;Kornblith,S.;Norouzi,M.;Hinton,G. ASimpleFrameworkforContrastiveLearningofVisualRepresentations. In
+ProceedingsoftheInternationalConferenceonMachineLearning(ICML),Online,13–18July2020;pp.1597–1607.
+61. Li,X.;Wang,W.;Hu,X.;Li,J.;Tang,J.;Yang,J. GeneralizedFocalLossV2:LearningReliableLocalizationQualityEstimationfor
+DenseObjectDetection. InProceedingsoftheIEEE/CVFConferenceonComputerVisionandPatternRecognition(CVPR),
+Online,19–25June2021;pp.11632–11641.
+62. vandenOord,A.;Li,Y.;Vinyals,O. RepresentationLearningwithContrastivePredictiveCoding. arXiv2018,arXiv:1807.03748.
+63. Zhou,W.;Dong,L.;Ye,O.;She,X.;Duan,X.;Peng,Z.;Wang,S.;Zhao,N.;Guo,X.CoalMineUndergroundDrillingSiteObject
+DetectionDataset.ScienceDataBank.2024.Availableonline:https://www.scidb.cn/en/detail?dataSetId=93f9246fd5794fc0be7
+b120a348eccc5(accessedon19August2026).
+64. Lin,T.Y.;Maire,M.;Belongie,S.;Hays,J.;Perona,P.;Ramanan,D.;Dollár,P.;Zitnick,C.L. MicrosoftCOCO:CommonObjectsin
+Context. InProceedingsoftheEuropeanConferenceonComputerVision(ECCV),Zurich,Switzerland,6–12September2014;
+pp.740–755.[CrossRef]
+65. Loshchilov,I.;Hutter,F. DecoupledWeightDecayRegularization. InProceedingsoftheInternationalConferenceonLearning
+Representations(ICLR),NewOrleans,LA,USA,6–9May2019.
+Disclaimer/Publisher’sNote: Thestatements, opinionsanddatacontainedinallpublicationsaresolelythoseoftheindividual
+author(s)andcontributor(s)andnotofMDPIand/ortheeditor(s).MDPIand/ortheeditor(s)disclaimresponsibilityforanyinjuryto
+peopleorpropertyresultingfromanyideas,methods,instructionsorproductsreferredtointhecontent.
+https://doi.org/10.3390/jimaging12090401

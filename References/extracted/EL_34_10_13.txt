@@ -1,0 +1,776 @@
+
+--- PAGE 1 ---
+Engineering Letters
+______________________________________________________________________________________
+Degradation-Aware Restoration and
+Quality-Calibrated Object Detection in Hazy and
+Noisy Environments
+Zihao Wang, Xiaolin Zhang*, Ran Liu
+Abstract—Object detection in haze-degraded environments and Tian [3] reported that traffic-sign detection remains
+is challenging because haze reduces visibility, weakens difficult in complex road environments, underscoring the
+target texture and boundary cues, and increases background
+broader need for detectors that remain reliable under
+interference. Consequently, DETR-based detectors may
+degraded visual conditions. Despite recent advances in
+exhibit inadequate representation of degraded inputs,
+imprecise bounding-box localization, and misalignment between feature modeling and inference efficiency, haze can still
+classificationconfidenceandlocalizationquality.Toaddressthese produce three related limitations: inadequate representation
+issues, we propose DARQ-Det, an end-to-end object detector of degraded inputs, inaccurate bounding-box localization,
+for haze-degraded scenes. The Degradation-Aware Restoration
+and inconsistency between classification confidence and
+Module enhances degraded inputs through lightweight
+localization quality. RF-DETR [4] offers a suitable baseline
+residual compensation and total variation regularization,
+thereby improving the discriminability of target regions. because it combines effective backbone representation with a
+The Hierarchical IoU-Focused Refinement Module introduces favorable accuracy–efficiency trade-off.
+IoU-aware focal reweighting to place greater emphasis on To address these limitations, we propose DARQ-Det, an
+low-quality matched boxes during regression optimization. The
+end-to-end object detection framework that integrates input
+IoUQualityCalibrationModuleestimatesthelocalizationquality
+restoration, localization refinement, and quality calibration.
+ofcandidateboxesandcombinesitwithclassificationconfidence
+toimprovecandidateranking.Experimentsareconductedontwo DARQ-Det contains three complementary components. The
+synthetic haze-degraded remote sensing datasets, RSOD-Haze Degradation-Aware Restoration Module (DARM) applies
+and HRSC2016-Haze, and the real-world hazy dataset RTTS. lightweight residual compensation with total variation
+DARQ-DetobtainsmAPscoresof68.13%,91.62%,and60.75%
+regularization to improve the representation of haze-degraded
+on RSOD-Haze, HRSC2016-Haze, and RTTS, respectively. The
+inputs. The Hierarchical IoU-Focused Refinement Module
+results indicate consistent improvements over the RF-DETR
+baseline in detection accuracy and localization quality across (HIFRM) introduces IoU-aware focal reweighting into
+synthetic and real haze-degraded data. bounding-box regression to emphasize low-quality matched
+boxes.TheIoUQualityCalibrationModule(IQCM)estimates
+IndexTerms—Haze-degradedobjectdetection,remotesensing
+object detection, image restoration, IoU quality calibration, the localization quality of candidate boxes and uses this
+DETR. estimate to calibrate classification confidence. Together, these
+components form a progressive pipeline from degraded-input
+I. INTRODUCTION compensation to localization refinement and score calibration.
+IN recent years, object detection has progressed The main contributions are summarized as follows:
+(1) We propose DARQ-Det, an end-to-end object detection
+substantially. Both conventional detection frameworks [1]
+framework for haze-degraded scenes that jointly addresses
+and end-to-end detectors represented by DETR [2] have
+degraded-inputrepresentation,bounding-boxlocalization,and
+achieved strong performance under standard imaging
+prediction-score calibration.
+conditions. Their performance may nevertheless deteriorate
+(2) We develop DARM, which combines lightweight
+in remote sensing scenes affected by haze. Targets in remote
+residual compensation with total variation regularization to
+sensing images are often small, densely distributed, and
+improve the representation of haze-degraded images.
+embedded in complex backgrounds, while haze further
+(3) We introduce HIFRM, which incorporates IoU-aware
+reduces contrast, weakens texture and boundary cues, and
+focal reweighting into bounding-box regression to place
+increasesbackgroundinterference.Thesefactorsmakefeature
+greater emphasis on low-quality matched boxes.
+representation and precise localization more difficult.
+(4) We design IQCM to estimate localization quality and
+Reliable detection in haze-degraded scenes requires
+combine it with classification confidence, thereby improving
+both robust classification and accurate localization. This
+candidate ranking and the reliability of the final detections.
+capability is relevant to applications such as remote sensing
+monitoring, ship detection, and traffic-scene analysis. Sun
+II. RELATEDWORK
+ManuscriptreceivedApril3,2026;revisedAugust14,2026.
+Zihao Wang is a postgraduate student at the University of A. Non-DETR Object Detection and Backbone Feature
+Science and Technology Liaoning, Anshan 114051, China (e-mail: Representation
+24210835000600@stu.ustl.edu.cn).
+XiaolinZhangisanassociateprofessorattheUniversityofScienceand Object detection methods can be broadly grouped into
+TechnologyLiaoning,Anshan114051,China(correspondingauthor;e-mail: conventional non-DETR approaches [1] and DETR-based
+zhangxiaolin@ustl.edu.cn).
+approaches [2]. Non-DETR methods include two-stage
+Ran Liu is a postgraduate student at the University of Science and
+TechnologyLiaoning,Anshan114051,China(e-mail:2710629329@qq.com). detectors [1] and one-stage detectors [5], with subsequent
+Volume 34, Issue 10, October 2026, Pages 4374-4384
+
+--- PAGE 2 ---
+Engineering Letters
+______________________________________________________________________________________
+research improving their accuracy, feature representation, the difficulty of object detection. Earlier studies commonly
+and inference efficiency. Hou et al. [6] investigated applied image enhancement or dehazing as a preprocessing
+lightweight object detection for remote sensing images, while step. Because restoration and detection are optimized
+Zhang et al. [7] developed POD-YOLO with bidirectional separately in such pipelines, the restored images are not
+dynamic cross-level feature aggregation. These studies necessarily aligned with the detector’s objectives.
+indicatethatefficientanddiscriminativefeaturerepresentation IA-YOLO [13] integrates image enhancement with object
+remains important, particularly in complex scenes and detectionandoptimizesbothcomponentsjointly.Themethod
+resource-constrained settings. is primarily designed for natural scenes and does not
+Faster R-CNN is a representative two-stage detector specifically address the characteristics of haze-degraded
+that incorporates a Region Proposal Network into the remote sensing imagery. For remote sensing applications,
+detection pipeline. The proposal and detection stages DHC-Net [14] combines adaptive dehazing with contrastive
+share convolutional features, allowing region generation, learning to mitigate image degradation and class imbalance.
+object classification, and bounding-box regression to be Existing work has mainly examined front-end restoration,
+optimized within a unified framework. In parallel, advances feature enhancement, or their integration with conventional
+in visual backbones have further improved the quality of detectors. Comparatively less attention has been given to
+representations used by detection models. adapting end-to-end DETR frameworks to haze-degraded
+Swin Transformer [8] constructs hierarchical feature scenes. We therefore use RF-DETR as the baseline and
+representations and uses shifted-window self-attention to incorporate input restoration, localization refinement, and
+exchange information across local windows while controlling quality calibration within a unified end-to-end framework.
+computational cost. This design makes Transformer
+backbones suitable for dense prediction tasks such as object D. Localization Optimization and Quality Calibration
+detection. However, many conventional detection frameworks
+Beyond degraded feature representation, detection
+continue to rely on anchor design and post-processing, which
+performance in hazy scenes is also affected by imprecise
+increases pipeline complexity and motivates the development
+bounding-box localization and misalignment between
+of end-to-end alternatives.
+classificationconfidenceandlocalizationquality.DETR-based
+methods commonly use L and GIoU losses [15] for box
+1
+B. DETR-Based End-to-End Detection and Real-Time regression. Although this formulation is broadly applicable,
+Advances it does not explicitly differentiate matched boxes according
+DETR [2] formulates object detection as a set-prediction to localization difficulty. Under haze, blurred contours and
+problem and uses bipartite matching to produce detections increased background interference can make ambiguous
+without anchor design or non-maximum suppression. matches more difficult to refine.
+Subsequent studies have focused primarily on training Previous studies have incorporated IoU information
+convergence, query initialization, detection accuracy, and into classification objectives or ranking strategies to
+real-time inference. reduce classification–localization misalignment. For example,
+DINO [9] improves DETR training and detection LW-DETR [12] uses an IoU-aware classification loss so that
+performance through contrastive denoising, mixed query the classification objective reflects localization quality during
+selection,andatwo-stagelook-forwardmechanism.Itsdesign training. This approach suggests that candidate ranking based
+primarily emphasizes detection accuracy, with less emphasis solelyonclassificationconfidencemaybesuboptimalandthat
+on real-time deployment. explicit quality information can improve ranking reliability.
+RT-DETR [10] addresses real-time end-to-end detection Although these approaches improve box regression or
+through an efficient hybrid encoder and an improved classification–localization consistency, most are developed
+query-initialization strategy. RT-DETRv2 [11] further for general object detection and do not explicitly consider
+improves training flexibility and deployment practicality. haze-induceddegradation.Accordingly,weintroducetargeted
+Nevertheless, efficient representation modeling and modifications to RF-DETR for localization refinement and
+lightweight architectural design remain relevant concerns for quality calibration in haze-degraded scenes.
+real-time DETR variants.
+LW-DETR [12] adopts a compact encoder–decoder III. METHODOLOGY
+architecture to balance detection accuracy and real-time
+A. Overall Network Architecture
+performance. Building on this line of work, RF-DETR [4]
+DARQ-Det extends the RF-DETR baseline by introducing
+combines a DINOv2 backbone with weight-sharing neural
+three components that address degraded-input representation,
+architecture search to improve feature representation and
+bounding-box localization, and prediction-score calibration.
+the accuracy–latency trade-off. These properties make
+The framework combines input restoration, localization
+RF-DETR an appropriate baseline for studying input
+refinement, and quality calibration within a single end-to-end
+restoration, localization refinement, and quality calibration in
+detection pipeline.
+haze-degraded scenes.
+As shown in Fig. 1, the framework comprises DARM,
+HIFRM, and IQCM. The input image I is first processed
+C. Object Detection under Haze and Other Visual by DARM to obtain the restored image I′. The backbone
+Degradations
+then extracts multi-level features {F }, where C denotes the
+l b
+Visual degradations such as haze and low illumination channel dimension of the backbone output. The Projector
+reducevisibilityandobscureimagedetails,therebyincreasing aligns the channels, adapts the feature scales, and fuses the
+Volume 34, Issue 10, October 2026, Pages 4374-4384
+
+--- PAGE 3 ---
+Engineering Letters
+______________________________________________________________________________________
+Fig.1. Overall architecture of DARQ-Det, comprising DARM, HIFRM, and IQCM.
+projected features at the target resolution to generate the I′ ∈RH×W×C:
+decoder input F , whose channel dimension is denoted by I′ =I+αR, (2)
+d
+C . The decoder jointly models F and N object queries to
+d d q
+where α is the residual-adjustment coefficient that controls
+produce query features Q. The detection head subsequently
+the strength of the compensation. The residual connection
+generates classification predictions P and bounding-box
+cls
+limits the modification to an additive correction and helps
+predictions B for C target categories.
+pred
+preserve the global structure of the input image.
+The training and inference paths differ after decoding.
+During training, a total variation term is applied to R to
+During training, HIFRM uses B and the ground-truth
+pred
+encourage spatial smoothness:
+boxes to compute the localization objective, while IQCM
+learnstoestimatethelocalizationqualityofselectedcandidate (cid:88)
+L = (|R −R |+|R −R |), (3)
+TV i+1,j i,j i,j+1 i,j
+boxes from the query features Q. During inference, IQCM
+i,j
+predicts localization-quality scores S and combines them
+IoU
+where L denotes the total variation regularization term
+with P to obtain the calibrated scores P . The final TV
+cls final
+and (i,j) indexes a spatial location in the residual map.
+detectionsareproducedfromP andB .Thefollowing
+final pred
+The term penalizes abrupt horizontal and vertical changes
+subsections describe the three modules in detail.
+in R. It is used only during training; inference retains only
+residual generation and fusion. In this way, DARM provides
+B. Degradation-Aware Restoration Module a constrained input-level correction before backbone feature
+Haze reduces target-region contrast and weakens the visual extraction.
+cues available to the detector. DARM is therefore designed to
+compensate for degradation at the input stage before feature C. Hierarchical IoU-Focused Refinement Module
+extraction. Its structure is shown in Fig. 2.
+Haze can obscure target boundaries and increase
+Let the input image be I ∈RH×W×C, where H, W, and
+localization uncertainty. HIFRM is designed to place greater
+C denote the image height, width, and number of channels,
+regression emphasis on matched boxes with poor overlap
+respectively. Three convolutional layers and two GELU
+quality. Its structure is illustrated in Fig. 3.
+activations map I to a restoration residual R∈RH×W×C:
+The predicted and ground-truth boxes are first associated
+R=Conv 3 (cid:0) GELU(Conv 2 (GELU(Conv 1 (I)))) (cid:1) , (1) through Hungarian matching. For the i-th predicted box ˆb i
+andthej-thground-truthboxb ,thematchingcostisdefined
+j
+where Conv i (·) denotes the i-th 3 × 3 convolution and as
+GELU(·) is the GELU activation function. The residual map
+R encodes local corrections used in the subsequent residual C i,j =α cls C i c , l j s+α L1 ∥ˆb i −b j ∥ 1 +α GIoU (1−GIoU(ˆb i ,b j )), (4)
+fusion. (cid:13) (cid:13)
+where Ccls is the classification cost, (cid:13)ˆb −b (cid:13) is the L
+The residual map is scaled by a coefficient α and added i,j (cid:13) i j(cid:13) 1
+1
+element-wise to the input image, yielding the restored image distance,andGIoU(ˆb ,b )isthegeneralizedintersectionover
+i j
+Volume 34, Issue 10, October 2026, Pages 4374-4384
+
+--- PAGE 4 ---
+Engineering Letters
+______________________________________________________________________________________
+Fig.2. Structure of the Degradation-Aware Restoration Module (DARM). DARM predicts a restoration residual through
+convolutional mapping, scales it using a restoration-strength coefficient, and adds it to the input image. Total variation
+regularization is applied only during training.
+union.Thecoefficientsα ,α ,andα weightthethree box predictions from all decoder layers. This multi-stage
+cls L1 GIoU
+terms.FollowingDeformable-DETR[16]andDN-DETR[17], supervision is the hierarchical component of the module and
+they are set to 2, 5, and 2, respectively. progressively constrains localization throughout decoding.
+The optimal one-to-one assignment is obtained by
+minimizing the total matching cost:
+D. IoU Quality Calibration Module
+(cid:88)
+Ngt
+In haze-degraded scenes, a candidate box may receive a
+σˆ =argmin C , (5)
+σ σ(j),j high classification score even when its localization quality
+j=1
+is limited. Such misalignment can adversely affect candidate
+where N gt is the number of ground-truth objects, σ(j) is the ranking. IQCM therefore estimates localization quality
+index of the prediction assigned to the j-th ground-truth box, explicitly and uses the estimate to calibrate classification
+and σˆ is the optimal assignment. The resulting matched pairs confidence.
+are used for regression supervision. During the decoding stage, let the query features output
+For each matched pair, HIFRM applies focal reweighting by the last decoder layer be denoted as
+to the GIoU loss so that the contribution of a sample depends
+on its overlap quality. The original GIoU loss for the k-th H ={h i }N i= q 1 , h i ∈RCq, (11)
+pair is
+whereN denotesthenumberofqueriesandC isthefeature
+L(k) =1−GIoU(ˆb ,b ), (6) q q
+GIoU k k dimension of each query. A lightweight quality head maps
+whereˆb and b denote the predicted and ground-truth boxes each final-layer query feature to an IoU-quality score:
+k k
+in the k-th matched pair, respectively. The focal-weighted
+qˆ =σ(W h +b ), (12)
+term is i q i q
+(cid:16) (cid:17)γ
+L˜(k) = L(k) , (7) where W and b are the weight and bias of the linear
+GIoU GIoU q q
+mapping, σ(·) is the sigmoid function, and qˆ ∈ [0,1] is
+i
+where γ is the focal modulation coefficient. It controls
+the predicted localization-quality score for the i-th query.
+how strongly the loss differentiates samples according to
+To limit supervision from low-confidence background
+localization quality. For γ > 1, larger GIoU losses receive
+queries, IQCM selects only the top M queries according to
+greater relative emphasis, directing optimization toward
+theirclassificationresponses.Letz ∈RC betheclassification
+i
+harder-to-localize matched boxes.
+logits of the i-th query, where C is the number of target
+The regression terms used by HIFRM are then defined as
+categories. Its objectness score is defined as
+L = (cid:88)
+Ngt(cid:13)
+(cid:13)ˆb −b (cid:13) (cid:13) , (8) s i = max σ(z i,c ), (13)
+L1 (cid:13) k k(cid:13) c∈{1,...,C}
+1
+k=1
+where s is the maximum classification response across the
+i
+L˜ = (cid:88)
+Ngt
+L˜(k) , (9) target categories. The indices of the top M queries form the
+GIoU GIoU quality-supervision set:
+k=1
+(cid:16) (cid:17)
+I =TopM {s }Nq ,M . (14)
+L =β L +β L˜ , (10) top i i=1
+reg L1 L1 GIoU GIoU
+where L constrains box position and scale, L˜ is Foreachselectedqueryi∈I ,letˆb denoteitspredicted
+L1 GIoU top i
+the focal-weighted GIoU term, and β and β are box and define the ground-truth box set as
+L1 GIoU
+their respective weights. Following DN-DETR [17], these
+B ={b }Nt , (15)
+coefficients are set to 5 and 2. HIFRM is applied to the j j=1
+Volume 34, Issue 10, October 2026, Pages 4374-4384
+
+--- PAGE 5 ---
+Engineering Letters
+______________________________________________________________________________________
+Fig. 3. Structure of the Hierarchical IoU-Focused Refinement Module (HIFRM). HIFRM establishes one-to-one box
+correspondences through Hungarian matching and applies GIoU-based focal reweighting to the matched pairs during
+regression optimization.
+where N is the number of ground-truth objects in the for training and 181 for testing. All images are resized to
+t
+image. The maximum IoU between ˆb and the ground-truth 800×800 pixels before being fed into the model.
+i
+boxes is used as the quality target: RTTS [20]. RTTS is a publicly available dataset for
+object detection in real-world hazy scenes and is part of
+(cid:40) max IoU(ˆb ,b ), N >0,
+i j t the RESIDE-β benchmark. It contains 4,322 traffic-related
+q
+i
+∗ = 1≤j≤Nt (16)
+images annotated in a VOC 2007-compatible format for five
+0, N =0,
+t
+categories: person, bicycle, car, bus, and motorbike. Because
+where q∗ ∈ [0,1] is the localization-quality target for the no paired haze-free reference images are provided, RTTS is
+i
+i-th query. This target allows the quality branch to learn box used here to evaluate detection performance under real haze
+overlap directly rather than infer it only from classification rather than restoration fidelity.
+confidence.
+IQCM uses binary cross-entropy with the IoU targets to B. Synthetic Haze Data Generation Strategy
+supervise the predicted quality scores:
+Because the original RSOD and HRSC2016 datasets
+L =− 1 (cid:88) (cid:2) q∗log(qˆ)+(1−q∗)log(1−qˆ) (cid:3) , (17) contain clear remote sensing images, we apply offline haze
+IQC M i i i i synthesistoconstructRSOD-HazeandHRSC2016-Haze.The
+i∈Itop
+synthesis procedure follows the atmospheric scattering model
+where L IQC denotes the IoU-quality calibration loss. This used in IA-YOLO [13] and DHC-Net [14].
+objective encourages the predicted quality score to reflect the Let J(x) and I(x) denote the clear image and the hazy
+overlap of the corresponding box. image at pixel location x, respectively. The hazy imaging
+Finally, the IQCM loss term is defined as process is formulated as
+(cid:0) (cid:1)
+L =λ L , (18) I(x)=J(x)t(x)+A 1−t(x) , (19)
+IQCM IQCM IQC
+whereλ istheweightassignedtothequality-calibration whereAdenotestheglobalatmosphericlightandt(x)denotes
+IQCM
+loss. The auxiliary objective adds localization-quality the transmission map. The transmission map is defined as
+supervision without altering the main decoder structure. t(x)=e−βd(x), (20)
+During inference, the predicted quality scores are combined
+with the classification confidence so that candidate ranking where β is the atmospheric scattering coefficient and d(x) is
+better reflects the estimated localization quality of each box. the scene depth. This formulation models the attenuation of
+scene radiance and the contribution of atmospheric light and
+is commonly used for synthetic haze generation.
+IV. EXPERIMENTALDESIGNANDIMPLEMENTATION
+BecauseRSODandHRSC2016donotprovidedepthmaps,
+A. Dataset and Haze Construction a radial approximation is used to obtain a spatially varying
+depth field:
+DARQ-Det is evaluated on three datasets: the synthetic
+ρ(x)
+haze-degraded remote sensing datasets RSOD-Haze and d(x)=0.04 , (21)
+max(H,W)
+HRSC2016-Haze, and the real-world hazy dataset RTTS.
+The first two datasets are generated offline from RSOD whereρ(x)istheEuclideandistancefrompixelxtotheimage
+and HRSC2016, respectively, while RTTS is used to assess center, and H and W are the image height and width. The
+performance under naturally occurring haze. resulting transmission map varies spatially without requiring
+RSOD [18]. RSOD is a public remote sensing object depthannotations,producingnonuniformvisibilityattenuation
+detection dataset containing 976 images and 6,950 annotated across the image.
+instances from four categories. It includes multi-scale targets In the implementation, the atmospheric light is fixed at
+and complex backgrounds and is therefore commonly used A = 0.05. Light, moderate, and heavy haze are generated
+to evaluate remote sensing detectors. using β ∈ [0.003,0.006], [0.013,0.015], and [0.018,0.020],
+HRSC2016[19].HRSC2016isaship-detectionbenchmark respectively. The same offline synthesis procedure is applied
+containing 1,061 images with resolutions from 300×300 to to the training, validation, and test partitions. Because the
+1500×900 pixels. In our experiments, 436 images are used transformation changes image appearance but not object
+Volume 34, Issue 10, October 2026, Pages 4374-4384
+
+--- PAGE 6 ---
+Engineering Letters
+______________________________________________________________________________________
+(a) (b) (c) (d)
+Fig.4. Qualitative results on representative RSOD-Haze test images: (a) ground truth, (b) RT-DETR, (c) RF-DETR, and (d)
+DARQ-Det.
+categoriesorlocations,theoriginalbounding-boxannotations The maximum number of detections per image is set
+are retained for the corresponding hazy images. to 1500 to accommodate densely distributed objects. At a
+Toevaluatetheeffectofhaze-densitydiversity,theadopted specified IoU threshold, AP is defined as
+multi-level strategy is compared with a single-level setting (cid:90) 1
+in which β is fixed at 0.014, while all other experimental AP= P(r)dr, (22)
+settings remain unchanged. 0
+where r denotes recall, and P(r) represents the precision at
+TABLEI a given recall level. Recall and precision are computed as
+ABLATIONSTUDYOFTHEMULTI-LEVELHAZESYNTHESIS
+follows:
+STRATEGYONTHERSOD-HAZEVALIDATIONSET. TP
+Recall= , (23)
+TP+FN
+Hazesynthesisstrategy β setting mAP AP50 AP75
+TP
+Single-levelhaze 0.014 66.57 95.02 74.98 Precision= , (24)
+Multi-levelhaze Threepredefinedranges 68.13 96.63 76.61 TP+FP
+where true positives (TP) are predictions matched to
+ground-truth objects at the specified Intersection over
+AsshowninTableI,themulti-levelhazesynthesisstrategy
+Union (IoU) threshold, false positives (FP) are unmatched
+improves mAP, AP , and AP by 1.56, 1.61, and 1.63
+50 75
+predictions, and false negatives (FN) are ground-truth objects
+percentagepoints,respectively,comparedwiththesingle-level
+without a matched prediction.
+setting. These consistent gains suggest that exposure to
+For evaluation, predictions are sorted by confidence and
+light, moderate, and heavy haze during training improves
+matched one-to-one with previously unmatched ground-truth
+the detector’s adaptability to variations in visibility, contrast,
+boxes of the same category. A prediction is counted as a
+and boundary degradation. In contrast, the fixed β setting
+TP when its maximum IoU satisfies the selected threshold;
+represents only a single degradation pattern, which may limit
+otherwise, it is counted as an FP. Ground-truth boxes that
+generalization across different haze densities.
+remain unmatched are counted as FNs. This procedure
+evaluates classification and localization jointly.
+C. Evaluation Metrics
+The metric AP uses an IoU threshold of 0.50
+50
+Wereportmeanaverageprecision(mAP),AP ,andAP . and primarily reflects object discovery under a moderate
+50 75
+At a fixed IoU threshold, average precision (AP) is the area localization requirement. The metric AP uses a threshold
+75
+under the precision–recall curve and reflects classification, of 0.75 and is more sensitive to bounding-box accuracy. The
+localization, and confidence ranking jointly. Reporting AP reported mAP is the mean of AP values computed at IoU
+at multiple IoU thresholds is useful for remote sensing thresholds from 0.50 to 0.95 in increments of 0.05. Together,
+detection, where small and densely distributed objects can these metrics characterize overall detection accuracy and
+make localization errors particularly consequential. localization quality under haze degradation.
+Volume 34, Issue 10, October 2026, Pages 4374-4384
+
+--- PAGE 7 ---
+Engineering Letters
+______________________________________________________________________________________
+D. Implementation Details Compared with RF-DETR, DARQ-Det improves mAP,
+AP , and AP by 1.11, 1.12, and 1.48 percentage points,
+All experiments are conducted on a server equipped with 50 75
+respectively. The larger gain at AP is consistent with an
+an NVIDIA RTX 3090 GPU. For controlled comparisons, 75
+improvement in stricter localization performance. Relative
+the evaluated variants follow the architecture and training
+to RT-DETRv2, the corresponding gains are 3.73, 3.03, and
+configuration of RF-DETR Medium. The baseline uses a
+6.91 percentage points. These improvements are obtained
+windowed DINOv2 visual encoder for multi-scale feature
+with 34.44 M parameters, only 1.08 M more than RF-DETR,
+extraction. The hidden dimension of the detection branch is
+indicatingthattheperformancegainisachievedwithalimited
+256, and the feed-forward network dimension is 2048.
+increase in model size.
+The models are trained for 180 epochs using AdamW [21].
+The learning rates for the main network and encoder are
+TABLEIII
+set to 1×10−4 and 1.5×10−4, respectively, with a weight EXPERIMENTALRESULTSONTHEHRSC2016-HAZE
+decay of 1×10−4. The batch size is 4, and gradients are DATASET.ALLMODELSARETRAINEDONTHETRAINING
+SETANDEVALUATEDONTHETESTSET.∗ DENOTES
+accumulated over four steps. A StepLR scheduler reduces RE-IMPLEMENTEDRESULTS.
+the learning rate after epoch 100. Unless stated otherwise,
+the remaining settings are identical to those of the RF-DETR Method Parameters (M) mAP AP AP
+50 75
+baseline. Non-DETR methods
+Faster R-CNN [1] ∗ 37.61 67.0 93.2 78.9
+E. Main Results LSKNet-T [22] ∗ 39.33 76.3 94.3 88.8
+Comparative experiments are conducted on RSOD-Haze, Swin-T [8] ∗ 45.32 78.4 93.3 89.9
+HRSC2016-Haze, and RTTS using representative DETR-based methods
+non-DETR and DETR-based detectors. RSOD-Haze and OWRT-DETR [23] ∗ 38.01 84.99 94.65 90.88
+HRSC2016-Haze provide controlled synthetic degradation, UAV-DETR [24] ∗ 44.62 87.12 95.17 91.96
+whereas RTTS evaluates the method under real haze. Across LW-DETR [12] ∗ 28.23 87.9 95.9 93.0
+the three datasets, DARQ-Det consistently improves mAP DINO-DETR [9] ∗ 46.67 89.4 96.9 93.8
+over the RF-DETR baseline, although the magnitude of the
+RF-DETR [4] ∗ 33.36 90.46 97.53 95.5
+gain varies by dataset and metric.
+RT-DETR [10] ∗ 42.71 90.9 97.6 95.3
+TABLEII RT-DETRv2 [11] ∗ 36.41 91.0 97.3 95.3
+EXPERIMENTALRESULTSONTHERSOD-HAZEDATASET.
+DARQ-Det (Ours) 34.44 91.62 98.22 96.43
+ALLMODELSARETRAINEDONTHETRAININGSETAND
+EVALUATEDONTHETESTSET.∗ DENOTES
+RE-IMPLEMENTEDRESULTS.
+HRSC2016-Haze. Table III presents the ship-detection
+results on HRSC2016-Haze. The elongated geometry and
+Method Parameters (M) mAP AP AP
+50 75
+boundarysensitivityofshiptargetsmakethisdatasetusefulfor
+Non-DETR methods
+assessing localization under degraded visibility. DARQ-Det
+Faster R-CNN [1] ∗ 37.61 45.4 82.7 44.7
+records the highest mAP, AP , and AP among the
+Swin-T [8] ∗ 45.32 55.8 92.1 62.4 50 75
+compared methods, reaching 91.62%, 98.22%, and 96.43%,
+LSKNet-T [22] ∗ 39.33 57.2 93.3 63.7
+respectively.ItalsousesfewerparametersthanRT-DETRand
+DETR-based methods RT-DETRv2,suggestingthattheimprovementisnotobtained
+OWRT-DETR [23] ∗ 38.01 50.52 81.26 55.32 solely through a larger model.
+UAV-DETR [24] ∗ 44.62 58.30 85.56 64.36 Compared with Faster R-CNN and Swin Transformer,
+LW-DETR [12] ∗ 28.23 58.8 88.0 60.7 DARQ-Det improves mAP by 24.62 and 13.22 percentage
+DINO-DETR [9] ∗ 46.67 60.1 87.5 69.1 points, respectively. The corresponding AP 75 gains are 17.53
+RT-DETR [10] ∗ 42.71 62.6 92.4 71.2 and6.53percentagepoints,indicatingasubstantialdifference
+under the stricter localization criterion. These results are
+RT-DETRv2 [11] ∗ 36.41 64.4 93.6 69.7
+consistent with the intended role of degradation-aware
+RF-DETR [4] ∗ 33.36 67.02 95.51 75.13
+compensation and localization-focused regression, although
+DARQ-Det (Ours) 34.44 68.13 96.63 76.61
+architectural differences among the compared methods also
+contribute to the observed gaps.
+RSOD-Haze. Table II reports the results on the Among the DETR-based methods, DARQ-Det improves
+multi-category RSOD-Haze dataset. DARQ-Det obtains the mAP, AP , and AP over RF-DETR by 1.16, 0.69, and
+50 75
+highestmAP,AP ,andAP amongthecomparedmethods, 0.93 percentage points, respectively. Relative to RT-DETRv2,
+50 75
+with values of 68.13%, 96.63%, and 76.61%, respectively. the gains are 0.62, 0.92, and 1.13 percentage points. Because
+Relative to the non-DETR methods, DARQ-Det yields most DETR-based methods already achieve high AP
+50
+higher mAP under the same haze-degraded evaluation setting. values on this dataset, the improvement in AP provides
+75
+This result indicates that the proposed framework remains additional evidence of better localization under a stricter
+effective when target contrast and boundary information are overlap requirement.
+reduced.Becausethecomparedmethodsdifferinarchitecture The pattern of improvements is consistent with the
+and training design, the comparison should be interpreted as complementarydesignofthethreemodules:DARMmodifies
+an overall performance comparison rather than as evidence the degraded input before feature extraction, HIFRM
+for a single causal factor. reweights box-regression errors, and IQCM incorporates
+Volume 34, Issue 10, October 2026, Pages 4374-4384
+
+--- PAGE 8 ---
+Engineering Letters
+______________________________________________________________________________________
+(a)
+(b)
+(c)
+(d)
+Fig.5. Qualitative results on representative HRSC2016-Haze test images: (a) ground truth, (b) RT-DETR, (c) RF-DETR, and
+(d) DARQ-Det.
+estimated localization quality into candidate ranking. Compared with Faster R-CNN and LSKNet-T, DARQ-Det
+RTTS. Table IV reports results on real hazy traffic scenes. improves mAP by 16.05 and 13.85 percentage points,
+DARQ-Det obtains 60.75% mAP, 85.06% AP 50 , and 68.10% respectively. The gains are also observed in AP 50 and AP 75 .
+AP . It achieves the highest mAP and AP among the These results show that the proposed framework remains
+75 50
+compared methods, while RT-DETRv2 is 0.10 percentage competitiveinsceneswithnaturallyvaryinghazeandcomplex
+points higher in AP . road backgrounds.
+75
+Compared with RT-DETRv2, DARQ-Det improves mAP
+TABLEIV and AP 50 by 0.55 and 0.76 percentage points, respectively,
+EXPERIMENTALRESULTSONTHERTTSDATASET.ALL but records a slightly lower AP . Relative to RF-DETR,
+75
+MODELSARETRAINEDONTHETRAININGSETAND
+the gains in mAP, AP , and AP are 0.85, 0.46, and 0.50
+EVALUATEDONTHETESTSET. 50 75
+percentage points. The consistent gains over the baseline
+Method Parameters (M) mAP AP AP suggest that the proposed modifications are not limited to the
+50 75
+synthetic haze-generation procedure.
+Non-DETR methods
+Faster R-CNN [1] 37.61 44.7 77.4 45.8 TheRTTSresultsareconsistentwiththeintendedfunctions
+Swin-T [8] 45.32 45.9 72.3 52.0 of DARM, HIFRM, and IQCM, which respectively address
+degraded-input compensation, box-regression weighting, and
+LSKNet-T [22] 39.33 46.9 73.6 52.2
+quality-aware candidate ranking. Because the gains on RTTS
+DETR-based methods
+are smaller than those on the synthetic datasets, they should
+RT-DETR [10] 42.71 59.8 83.7 67.1
+be interpreted as moderate but consistent improvements in
+RT-DETRv2 [11] 36.41 60.2 84.3 68.2 real haze. The smaller margin may be related to the broader
+OWRT-DETR [23] 38.01 49.32 73.32 54.77 variationinnaturalhaze,illumination,andtrafficbackgrounds,
+UAV-DETR [24] 44.62 54.06 77.33 60.42 which is not fully represented by a controlled synthesis
+DINO-DETR [9] 46.67 55.1 78.9 63.3 process. Moreover, the slight AP 75 disadvantage relative to
+RT-DETRv2 indicates that the benefit is not uniform at every
+LW-DETR [12] 28.23 59.0 83.7 65.3
+localization threshold. Overall, the results indicate consistent
+RF-DETR [4] 33.36 59.9 84.6 67.6
+performance gains across synthetic and real haze conditions
+DARQ-Det (Ours) 34.44 60.75 85.06 68.10
+and motivate the following component-wise analysis.
+Volume 34, Issue 10, October 2026, Pages 4374-4384
+
+--- PAGE 9 ---
+Engineering Letters
+______________________________________________________________________________________
+F. Ablation Studies should therefore be interpreted across all three metrics rather
+than through a single threshold.
+DARQ-Det contains DARM, HIFRM, and IQCM,
+The two-module combinations provide larger gains than
+which target degraded-input representation, bounding-box
+the corresponding single-module settings. Among them,
+localization, and classification–localization consistency,
+DARM+HIFRM obtains 91.21% mAP, 97.95% AP , and
+respectively. Ablation studies are conducted on RSOD-Haze, 50
+96.15% AP . This result is consistent with complementarity
+HRSC2016-Haze, and RTTS using RF-DETR as the baseline. 75
+between input-level compensation and localization-focused
+The three datasets cover synthetic remote sensing haze and
+regression.
+real-world traffic haze.
+The complete model achieves the highest values for all
+RSOD-Haze. Table V shows that each module improves
+three metrics: 91.62% mAP, 98.22% AP , and 96.43%
+mAPwhenaddedindividuallytoRF-DETR.DARMincreases 50
+AP . These values exceed the RF-DETR baseline by 1.16,
+mAP from 67.02% to 67.21%, HIFRM to 67.18%, and 75
+0.69, and 0.93 percentage points, respectively, indicating
+IQCM to 67.13%. These modest but consistent changes are
+that the combined modules improve both average detection
+aligned with the respective objectives of input compensation,
+performanceandstricterboxlocalizationonHRSC2016-Haze.
+localization-focused regression, and quality-aware calibration.
+TABLEVII
+TABLEV OVERALLABLATIONRESULTSOFDARQ-DETONTHE
+OVERALLABLATIONRESULTSOFDARQ-DETONTHE
+RTTSTESTSET.THEFIRSTROWDENOTESTHERF-DETR
+RSOD-HAZEVALIDATIONSET.
+BASELINEWITHOUTTHEPROPOSEDMODULES.
+DARM HIFRM IQCM Params (M) mAP AP AP
+50 75 DARM HIFRM IQCM Params (M) mAP AP AP
+50 75
+– – – 33.36 67.02 95.51 75.13
+– – – 33.36 59.90 84.60 67.60
+✓ – – 33.41 67.21 95.73 75.70 ✓ – – 33.41 60.25 84.77 67.73
+– ✓ – 33.38 67.18 95.66 75.42 – ✓ – 33.38 60.12 84.71 67.71
+– – ✓ 33.41 67.13 95.60 75.38 – – ✓ 33.41 60.08 84.69 67.65
+✓ ✓ – 33.67 67.75 95.77 76.64 ✓ ✓ – 33.67 60.49 84.91 67.83
+– ✓ ✓ 33.71 67.71 95.76 76.45 – ✓ ✓ 33.71 60.44 84.90 67.78
+✓ – ✓ 33.88 67.66 95.75 76.23 ✓ – ✓ 33.88 60.37 84.88 67.80
+✓ ✓ ✓ 34.44 68.13 96.63 76.61 ✓ ✓ ✓ 34.44 60.75 85.06 68.10
+Two-module combinations yield larger mAP gains than RTTS. Table VII shows that DARM, HIFRM, and IQCM
+the corresponding single-module variants. DARM+HIFRM individually increase mAP from 59.90% to 60.25%, 60.12%,
+reaches 67.75% mAP and the highest AP 75 in the table, and 60.08%, respectively. The gains are small but consistent
+76.64%. The complete model obtains the highest mAP and across the three individual variants, suggesting that each
+AP 50 , at 68.13% and 96.63%, while its AP 75 is 76.61%. component contributes under real haze.
+Relative to RF-DETR, the complete model improves the The two-module combinations further increase mAP, with
+three metrics by 1.11, 1.12, and 1.48 percentage points, DARM+HIFRMreaching60.49%,84.91%AP ,and67.83%
+50
+respectively. The results indicate complementary effects AP . This pattern is consistent with complementary effects
+75
+among the modules, although the best configuration varies between input compensation and localization refinement.
+slightly by metric. The complete model produces the highest values in the
+ablation table: 60.75% mAP, 85.06% AP , and 68.10%
+50
+TABLEVI
+AP . Compared with RF-DETR, the improvements are 0.85,
+OVERALLABLATIONRESULTSOFDARQ-DETONTHE 75
+HRSC2016-HAZETESTSET.THEFIRSTROWDENOTES 0.46, and 0.50 percentage points, respectively. The consistent
+THERF-DETRBASELINEWITHOUTTHEPROPOSED gains across the three metrics support the use of the three
+MODULES.
+modules together on RTTS.
+DARM HIFRM IQCM Params (M) mAP AP AP
+50 75 V. CONCLUSION
+– – – 33.36 90.46 97.53 95.50
+✓ – – 33.41 90.81 97.31 95.73 ThispaperpresentsDARQ-Det,anend-to-enddetectorthat
+– ✓ – 33.38 90.75 97.71 95.65 combines degraded-input compensation, localization-focused
+regression, and quality-aware score calibration. DARM
+– – ✓ 33.41 90.66 97.62 95.59
+applies residual restoration with total variation regularization,
+✓ ✓ – 33.67 91.21 97.95 96.15
+HIFRM reweights the GIoU regression objective according
+– ✓ ✓ 33.71 91.18 97.90 96.13
+to localization difficulty, and IQCM estimates box quality for
+✓ – ✓ 33.88 91.13 97.86 96.02
+candidate ranking.
+✓ ✓ ✓ 34.44 91.62 98.22 96.43
+On RSOD-Haze, HRSC2016-Haze, and RTTS, DARQ-Det
+improves mAP over the RF-DETR baseline by 1.11, 1.16,
+HRSC2016-Haze. As shown in Table VI, each module and 0.85 percentage points, respectively. The ablation results
+improvesmAPindividually:DARMreaches90.81%,HIFRM show that each module contributes to mAP and that
+90.75%, and IQCM 90.66%, compared with 90.46% for their combination generally provides the strongest overall
+RF-DETR. The individual changes in AP and AP are performance. The gains on the real-world RTTS dataset
+50 75
+not uniformly positive; for example, DARM slightly reduces are smaller than those on the synthetic datasets but remain
+AP while increasing mAP and AP . The ablation results consistent across mAP, AP , and AP .
+50 75 50 75
+Volume 34, Issue 10, October 2026, Pages 4374-4384
+
+--- PAGE 10 ---
+Engineering Letters
+______________________________________________________________________________________
+(a)
+(b)
+(c)
+(d)
+Fig.6. Qual itative results on representative RTTS test images: (a) RT-DETR, (b) RF-DETR, (c) DARQ-Det, and (d) ground
+truth.
+These findings indicate that joint restoration, localization [8] Z. Liu, Y. Lin, Y. Cao, H. Hu, Y. Wei, Z. Zhang, S. Lin, and
+refinement, and quality calibration can improve RF-DETR B. Guo, “Swin Transformer: Hierarchical vision transformer using
+shifted windows,” in Proceedings of the IEEE/CVF International
+under haze degradation. Future work will examine a broader
+ConferenceonComputerVision,pp.10012–10022,2021.
+range of real-world degradation conditions and reduce the [9] H.Zhang,F.Li,S.Liu,L.Zhang,H.Su,J.Zhu,L.Ni,andH.-Y.Shum,
+computational cost for resource-constrained deployment. “DINO:DETRwithimproveddenoisinganchorboxesforend-to-end
+objectdetection,”inTheEleventhInternationalConferenceonLearning
+Representations,2023.
+REFERENCES [10] Y.Zhao,W.Lv,S.Xu,J.Wei,G.Wang,Q.Dang,Y.Liu,andJ.Chen,
+[1] S. Ren, K. He, R. Girshick, and J. Sun, “Faster R-CNN: Towards “DETRsbeatYOLOsonreal-timeobjectdetection,”inProceedingsof
+real-timeobjectdetectionwithregionproposalnetworks,”Advances theIEEE/CVFConferenceonComputerVisionandPatternRecognition,
+inNeuralInformationProcessingSystems,vol.28,2015. pp.16965–16974,2024.
+[2] N. Carion, F. Massa, G. Synnaeve, N. Usunier, A. Kirillov, and [11] W. Lv, Y. Zhao, Q. Chang, K. Huang, G. Wang, and Y. Liu,
+S. Zagoruyko, “End-to-end object detection with transformers,” in “RT-DETRv2: Improved baseline with bag-of-freebies for real-time
+European Conference on Computer Vision, pp. 213–229, Springer, detectiontransformer,”CoRR,vol.abs/2407.17140,2024.
+2020. [12] Q. Chen, X. Su, X. Zhang, J. Wang, J. Chen, Y. Shen, C. Han,
+[3] M. Sun and Y. Tian, “Research on traffic sign object detection Z. Chen, W. Xu, F. Li, S. Zhang, K. Yao, E. Ding, G. Zhang, and
+algorithmbasedondeeplearning,”EngineeringLetters,vol.32,no.8, J.Wang,“LW-DETR:AtransformerreplacementtoYOLOforreal-time
+pp.1562–1568,2024. detection,”CoRR,vol.abs/2406.03459,2024.
+[4] I. Robinson, P. Robicheaux, M. Popov, D. Ramanan, and N. Peri, [13] W.Liu,G.Ren,R.Yu,S.Guo,J.Zhu,andL.Zhang,“Image-adaptive
+“RF-DETR: Neural architecture search for real-time detection YOLO for object detection in adverse weather conditions,” in
+transformers,”inTheFourteenthInternationalConferenceonLearning ProceedingsoftheAAAIConferenceonArtificialIntelligence,vol.36,
+Representations,2026. pp.1792–1800,2022.
+[5] T.-Y. Lin, P. Goyal, R. Girshick, K. He, and P. Dollar, “Focal loss [14] Y.Li,Q.Ling,Y.An,H.Yin,X.Gao,Z.Zhu,andP.Han,“DHC-Net:
+fordenseobjectdetection,”inProceedingsoftheIEEEInternational Aremotesensingobjectdetectionunderhazeandclassimbalance,”
+ConferenceonComputerVision,pp.2980–2988,2017. IEEETransactionsonGeoscienceandRemoteSensing,2025.
+[6] D.Hou,Y.Zhang,andJ.Ren,“Alightweightobjectdetectionalgorithm [15] H.Rezatofighi,N.Tsoi,J.Gwak,A.Sadeghian,I.Reid,andS.Savarese,
+for remote sensing images,” Engineering Letters, vol. 33, no. 3, “Generalizedintersectionoverunion:Ametricandalossforbounding
+pp.704–711,2025. box regression,” in Proceedings of the IEEE/CVF Conference on
+[7] Y.Zhang,M.Ma,Z.Wang,J.Li,andY.Sun,“POD-YOLOobject ComputerVisionandPatternRecognition,pp.658–666,2019.
+detectionmodelbasedonbi-directionaldynamiccross-levelpyramid [16] X. Zhu, W. Su, L. Lu, B. Li, X. Wang, and J. Dai, “Deformable
+network,”EngineeringLetters,vol.32,no.5,pp.995–1003,2024. DETR:Deformabletransformersforend-to-endobjectdetection,”in
+Volume 34, Issue 10, October 2026, Pages 4374-4384
+
+--- PAGE 11 ---
+Engineering Letters
+______________________________________________________________________________________
+InternationalConferenceonLearningRepresentations,2021.
+[17] F.Li,H.Zhang,S.Liu,J.Guo,L.M.Ni,andL.Zhang,“DN-DETR:
+Accelerate DETR training by introducing query denoising,” in
+Proceedings of the IEEE/CVF Conference on Computer Vision and
+PatternRecognition,pp.13619–13627,2022.
+[18] Y.Long,Y.Gong,Z.Xiao,andQ.Liu,“Accurateobjectlocalization
+in remote sensing images based on convolutional neural networks,”
+IEEETransactionsonGeoscienceandRemoteSensing,vol.55,no.5,
+pp.2486–2498,2017.
+[19] Z. Liu, L. Yuan, L. Weng, and Y. Yang, “A high-resolution optical
+satelliteimagedatasetforshiprecognitionandsomenewbaselines,”
+inInternationalConferenceonPatternRecognitionApplicationsand
+Methods,vol.2,pp.324–331,SciTePress,2017.
+[20] B. Li, W. Ren, D. Fu, D. Tao, D. Feng, W. Zeng, and Z. Wang,
+“Benchmarkingsingle-imagedehazingandbeyond,”IEEETransactions
+onImageProcessing,vol.28,no.1,pp.492–505,2018.
+[21] I.LoshchilovandF.Hutter,“Decoupledweightdecayregularization,”
+inInternationalConferenceonLearningRepresentations,2019.
+[22] Y. Li, X. Li, Y. Dai, Q. Hou, L. Liu, Y. Liu, M.-M. Cheng, and
+J. Yang, “LSKNet: A foundation lightweight backbone for remote
+sensing,”InternationalJournalofComputerVision,vol.133,no.3,
+pp.1410–1431,2025.
+[23] S.Ma,Y.Zhang,L.Peng,C.Sun,L.Ding,andY.Zhu,“OWRT-DETR:
+A novel real-time transformer network for small object detection
+in open-water search and rescue from UAV aerial imagery,” IEEE
+TransactionsonGeoscienceandRemoteSensing,2025.
+[24] H.Zhang,H.Zhang,K.Liu,Z.Gan,andG.-N.Zhu,“UAV-DETR:
+Efficient end-to-end object detection for unmanned aerial vehicle
+imagery,”in2025IEEE/RSJInternationalConferenceonIntelligent
+RobotsandSystems(IROS),pp.15143–15149,IEEE,2025.
+Zihao Wang is a postgraduate student in the School of Computer and
+SoftwareEngineeringattheUniversityofScienceandTechnologyLiaoning,
+Anshan,Liaoning114051,China.Hisresearchinterestsincludedeeplearning
+andcomputervision.
+Xiaolin Zhang is an associate professor in the School of Computer and
+SoftwareEngineeringattheUniversityofScienceandTechnologyLiaoning,
+Anshan,Liaoning114051,China.Hisresearchinterestsincludecomputer
+vision.
+RanLiuisapostgraduatestudentintheSchoolofComputerandSoftware
+EngineeringattheUniversityofScienceandTechnologyLiaoning,Anshan,
+Liaoning114051,China.Herresearchinterestsincludedeeplearning.
+Volume 34, Issue 10, October 2026, Pages 4374-4384

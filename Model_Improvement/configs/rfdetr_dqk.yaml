@@ -1,0 +1,34 @@
+model:
+  name: "RF-DETR-DQK"
+  variant: "RFDETRDQKEnhanced"
+  pretrained: true
+  improvements:
+    - "DARM (Degradation-Aware Restoration)"
+    - "UFFR (Underwater Frequency Reweighting)"
+    - "DAFD (Degradation-Aware Frequency Decomposition)"
+    - "MFA (Multi-Scale Frequency-Aware Attention)"
+
+training:
+  epochs: 80
+  patience: 10
+  imgsz: 640
+  batch_size: 16
+  grad_accum_steps: 1
+  workers: 4
+  lr: 0.0001
+  weight_decay: 0.0001
+  device: 0
+  seed: 42
+  eval_interval: 1
+  amp_dtype: "bf16"
+
+evaluation:
+  eval_conf: 0.01
+  cm_conf: 0.25
+  iou_threshold: 0.50
+  split: "test"
+
+loss_weights:
+  loss_vfl: 1.0
+  loss_bbox: 5.0
+  loss_giou: 2.0

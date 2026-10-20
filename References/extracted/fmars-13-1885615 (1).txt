@@ -1,0 +1,1107 @@
+
+--- PAGE 1 ---
+TYPEOriginalResearch
+PUBLISHED24July2026
+DOI10.3389/fmars.2026.1885615
+Improved Transformer-based
+detection of underwater plastic
+OPENACCESS
+debris in complex environments
+EDITEDBY
+VarenyamAchal,
+GuangdongTechnion-IsraelInstituteof
+Technology(GTIIT),China
+Yiyang Li1, Mengsong Luan1, Hanpeng Yu1 and Huayun Yu1,2*
+REVIEWEDBY
+GaoXiaoqian, 1SchoolofComputerScience,YangtzeUniversity,Jingzhou,Hubei,China,2ArtificialIntelligence
+ShandongUniversityofScienceand
+ResearchPlatform,YangtzeUniversity,Jingzhou,Hubei,China
+Technology,China
+GuojunWu,
+ChineseAcademyofSciences(CAS),
+Introduction:Underwaterplasticdebrisdetectionremainschallenginginvisually
+China
+clutteredenvironmentsbecauseunderwaterimagesareoftenseverelydegraded,
+*CORRESPONDENCE
+HuayunYu debris instances are small, and backgrounds are complex. To address these
+397908756@qq.com challenges, this study develops an improved RF-DETR detector for underwater
+RECEIVED19May2026 plasticdebrisdetection.
+REVISED24June2026
+Methods:Theproposedarchitectureintegratesanunderwaterfrequency-aware
+ACCEPTED30June2026
+PUBLISHED24July2026 feature reweighting module, a multi-scale frequency-aware attention module,
+CITATION andaqueryadaptivereweightingmodulewithboundedlearnablescales.These
+LiY,LuanM,YuHandYuH(2026)
+modulesaredesignedtoenhancetherepresentationofweak-textureandlow-
+ImprovedTransformer-baseddetection
+ofunderwaterplasticdebrisincomplex
+contrastfeatureswhileimprovingquery-levellocalizationandclassification.The
+environments. model was evaluated on the TrashCan dataset and further assessed through a
+Front.Mar.Sci.13:1885615.
+transferexperimentontheDeepTrashdataset.
+doi:10.3389/fmars.2026.1885615
+Results: On the TrashCan dataset, the proposed detector achieved 93.11%
+COPYRIGHT
+precision,anF1-scoreof86.63%,anmAP@50of91.84%,andanmAP@50:95of
+©2026Li,Luan,YuandYu.Thisisan
+open-accessarticledistributedunderthe 69.92%.IntheDeepTrashtransferexperiment,theTrashCan-trainedcheckpoint
+termsoftheCreativeCommons
+was adapted to the one-class plastic target dataset and achieved 91.67%
+AttributionLicense(CCBY).Theuse,
+distributionorreproductioninother precision, 79.00%recall, an F1-score of 84.86%, anmAP@50 of 86.23%, and an
+forumsispermitted,providedthe mAP@50:95 of 55.06%. Compared with representative baselines, including
+originalauthor(s)andthecopyright
+YOLOv11n, YOLO26n, YOLO26s, and RT-DETR, the improved RF-DETR
+owner(s)arecreditedandthatthe
+originalpublicationinthisjournalis achieved the strongest overall performance in the reported TrashCan
+cited,inaccordancewithaccepted
+evaluation and DeepTrash transfer experiment. Ablation results further showed
+academicpractice.Nouse,distribution
+orreproductionispermittedwhichdoes thatthethreeproposedmodulesperformedbestwhenusedincombination.
+notcomplywiththeseterms. Discussion:Theresultsdemonstratethattheproposedfrequency-awarefeature
+enhancementandadaptivequeryreweightingstrategiesimprovethedetectionof
+small and low-contrast underwater debris. The transfer results also indicate
+promising cross-dataset generalization. Overall, the proposed method provides
+afavorabletrade-offbetweendetectionperformanceandmodelcomplexityon
+theevaluateddatasets.
+KEYWORDS
+complexunderwaterenvironments,frequency-awarefeaturereweighting,marine
+plasticdebris,multi-scalerefinement,queryadaptivereweighting,Transformer-based
+detection,underwaterobjectdetection
+FrontiersinMarineScience 01 frontiersin.org
+
+--- PAGE 2 ---
+Lietal. 10.3389/fmars.2026.1885615
+1 Introduction important requirement is a reliable prediction from each available
+image rather than a decision accumulated through many
+Marineplasticpollutionhasbecomealong-standingconcernin rapiddetections.
+marine conservation and ocean governance as plastic production This priority becomes sharper in deep-sea inspection, fixed-
+andconsumptioncontinuetorise.Plasticwasteisnowdocumented point robotic grasping, and low-frequency sampling. These oper-
+throughout the water column, from near-surface layers to the ating modes involve costly deployment, limited communication
+seafloor, and its presence is associated with habitat damage, coral bandwidth, sparse opportunities for reacquisition, and little room
+stress,andwiderecologicaldisturbance.Asaresult,marinemon- for manual verification after the fact (Barnard et al., 2024; Rohan
+itoring is increasingly built around sensor networks, automated et al., 2025). When a target appears briefly or from a narrow
+interpretation, and robot-assisted surveys rather than manual viewpoint, useful progress means reducing misses and false
+inspection alone. Work on integrated observing systems, seafloor alarms in each captured frame rather than only accelerating
+littersurveys,AI-basedpollutionmonitoring,deep-seaautonomous inference. Models that exploit broad scene context and allow
+observation, and underwater robotic autonomy reflects this task-specificdecoderbehaviorarethereforeappealing.
+operational change (Maximenko et al., 2019; Madricardo et al., Forthisreason,usingTransformer-basedmodelsisapromising
+2020; Prakash and Zielinski, 2025; Barnard et al., 2024; Rohan choice. A series of existing studies has shown that DETR variants,
+etal.,2025). such as UW-DETR and Efficient-Deformable-DETR, also achieve
+Underwaterplasticdebrisdetectionalsodiffersmarkedlyfrom strongperformanceinunderwaterdetection(Lietal.,2024;Xieetal.,
+litterdetectiononlandbecausethevisualevidenceislessstableand 2025; Lin et al., 2026). At the same time, a large body of research
+the scene composition is far more variable. The target set spans indicates that relying solely on local appearance is insufficient to
+recognizableobjectssuchasbottles,cans,bags,andcups,butalso effectively distinguish target objects from the surrounding back-
+films,fragments,ropes,andpartlyhiddenresidueswhoseoutlines ground.Insuchcases,aglobalattentionmechanismwithabroader
+are incomplete or deformed. In this paper, two datasets are used, receptivefieldandstrongercontextualconnectivitycanenablebetter
+eachservingadifferentpurpose.Theablationexperimentsandpart performance in underwater detection, which is also the motivation
+of the comparative experiments are conducted on the 22-class forintroducingthequeryadaptivereweightingmoduleinthispaper
+TrashCandataset(Hongetal.,2020),whilethetransferexperiment (Liuetal.,2022;Mengetal.,2021;Wangetal.,2022).
+isconductedontheone-classDeepTrashdataset(Tataetal.,2021). Among DETR-type models, RF-DETR is selected as the base-
+Survey papers repeatedly return to the same unresolved issues: lineforitssearchedfeaturepathway,end-to-endsetprediction,and
+impaired image quality, small targets, domain shift across scenes, query-basedglobalreasoningratherthanforreal-timeinferenceas
+and deployment constraints (Er et al., 2023; Jian et al., 2024). A the core objective (Robinson et al., 2026). This design better
+detectorintendedformarine-debrismonitoringthereforeneedsto matches the deep-sea monitoring setting emphasized in this
+remainreliableacrossbothrelativelyclearviewsandscenesaffected paper:whendatatransmissionisdifficultandrepeatedacquisition
+byclutter,lowcontrast,andchangingacquisitionconditions. is limited, each available image should support a reliable decision
+Performancetypicallydeterioratesonceattenuation,scattering, insteadofrelyingonmanyrapiddetections.Itsreal-timecapability
+color cast, and non-uniform lighting erase fine contours and isthereforeconsideredasecondaryinheritedadvantage,whilethe
+weakenobject–backgroundcontrast.Forthatreason,manyunder- mainmotivationisstablesingle-imagepredictionwithafavorable
+water detectors couple recognition with compensation for image balance between representation quality and model complexity.
+degradation. MarineDetNet inserts image enhancement into the Compared with UWDETR, Efficient-Deformable-DETR, and RT-
+pipeline (Lakshmanan et al., 2025). Multi-distortion modeling DETR,RF-DETRprovides amoregeneralsearched detector scaf-
+likewiseshowsthatdegradationhandlingcanchangedownstream foldforinsertingtheproposedfrequency-domain,multi-scale,and
+detection quality (Liu et al., 2026), and methods combining query-sidemodifications.Suchascaffoldisvaluableforunderwater
+enhancementwithdeformableconvolutionfurtherblurtheboun- plasticdebrisdetection,wheretargetsizevarieswidely,morphology
+darybetweenrestorationandfeatureextraction(Guoetal.,2025). isunstable,andsourcesofbackgroundinterferencearediverse.At
+Other designs pursue the same goal through stronger feature thesametime,recentstudieshighlighttheimportanceoffrequency-
+extraction,fusion,andattention-basedheads(Lietal.,2025a,b). aware representation in degraded visual scenes. Underwater fre-
+ManyrecentsystemsstillfavorYOLO-styleformulationsbecause quency refinement, frequency channel attention, Fourier-domain
+they are easy to deploy and computationally efficient. LFN-YOLO, modeling, global filtering, high-frequency multispectral attention,
+DyAqua-YOLO, and CEH-YOLO pursue that direction through and multi-scale frequency fusion all suggest that frequency infor-
+lightweightreparameterization,dynamicadaptation,andcomposite mation can improve feature discrimination when texture is weak
+enhancement(Liuetal.,2025;LiandPeng,2025;FengandJin,2024). andbackgroundenergyisdominant(Wangetal.,2025;Qinetal.,
+For marine debris specifically, instance segmentation, UTNet, and 2021; Li et al., 2021; Rao et al.,2021; Yinget al., 2025; Yan et al.,
+improved YOLO variants show that streamlined architectures can 2025;Liuetal.,2024).Theseobservationsmotivatetheintegration
+stillperformwellindifficultscenes(Corriganetal.,2023;Cuietal., of Fourier-domain band reweighting, multi-scale feature refine-
+2025;DeluxniandSudhakaran,2025;Yuanweietal.,2026).Yetthe ment,andquery-levelrecalibrationintotheRF-DETRframework.
+present task is not primarily defined by real-time operation or To clarify the baseline selection, Table 1 compares candidate
+maximumframerate.Indeep-seamonitoring,wheredatatransmis- detectorfamiliesfromtheperspectiveofhowtheoriginaldetectors
+sion can be difficult and repeated acquisition is limited, the more matchunderwaterdebrisdetection,ratherthanfinaldetectionscores
+FrontiersinMarineScience 02 frontiersin.org
+
+--- PAGE 3 ---
+Lietal. 10.3389/fmars.2026.1885615
+TABLE1 Comparisonofmodelcharacteristicsforbaselineselection.
+Candidate Detection Limitationfor Reasonforbaseline
+Mainadvantage
+detector formulation underwaterdebris suitability
+Strongregionproposal Heavierpipeline,proposal- Usefulclassicalreference,butlesssuitableasthemain
+Two-stage
+mechanismandstable dependentinference,andlimited baselinebecauseunderwaterdebrisdetectionrequires
+FasterR-CNN region-based
+localizationforgeneral globalrelationmodelingunder strongerscene-levelcontextandmorecompactend-to-end
+detector
+objects densesmall-objectclutter prediction
+One-stagedense Simpleinferencepipeline Denseanchorsdependstronglyon Servesasaconventionalefficiency-orientedbaseline,but
+SSD andmoderate localappearanceandcanmiss
+detector provideslimitedsupportforglobalcontextmodeling
+computationalcost weak-textureorlow-contrastdebris
+Highinferenceefficiency, Predictionsmainlydependonlocal
+One-stagedense Usedasdeployment-orientedcomparisonbaselines,butnot
+maturelightweight featurecellsandNMS,soweak
+detectorsusing selectedastheprimarybaselinebecausethelocaldense
+YOLO-series implementations,and boundaries,turbidbackgrounds,
+grid-,anchor-, formulationislessalignedwiththeglobal-contextand
+detectors densemulti-scale andirregulardebrismorphology
+oranchor-free duplicate-suppressionneedsofclutteredunderwaterdebris
+predictionforvisuallyclear canincreasemisseddetections,false
+assignment detection
+debriscategories positives,orduplicateboxes
+Real-timeend- Itsdesignmainlyemphasizes
+to-end ProvidesNMS-free latencyandefficienthigh- UsedasastrongTransformerreference,butnotselectedas
+Transformer predictionandTransformer confidencequeryselectionfor themainbaselinebecausethetaskprioritizesreliablesingle-
+RT-DETR decodingwhilemaintaining
+detectorwith generaldetection;inthisstudy, imagepredictionunderlimiteddatatransmissionand
+efficienthybrid pract e i f c fi a c l ie re n a c l y -time speedisasecondarydeployment sparsereacquisitionoverrepeatedhigh-speeddetection
+encoding advantageratherthanthecoregoal
+End-to-end Combinesglobalcontext
+Theoriginalmodelisstillgeneral- Selectedastheprimarybaselinebecauseitbettermatches
+Transformer modeling,NMS-freeset
+purposeanddoesnotexplicitly reliablesingle-imagepredictionindeep-seamonitoring:
+detectorwitha prediction,query-level
+compensateforunderwater globalcontext,setprediction,andqueryreasoninghelp
+RF-DETR searchedfeature objectreasoning,andan
+frequencyattenuation,severeimage reducebackgroundconfusionandduplicatedetectionsfor
+pathwayand architecture-searchdriven
+query-based accuracy–complexity degradation,ormulti-scaledebris smallorirregulardebris,whilereal-timecapabilityremains
+ambiguity onlyanadditionalnon-dominantadvantage
+decoder balance
+alone.RF-DETRisselected asthe baselinebecausethe unmodified 2. We propose an underwater frequency-aware feature
+modelalreadycombinesasearchedfeaturepathway,end-to-endset reweightingmechanismandamulti-scalefrequency-aware
+prediction,NMS-freeTransformerdecoding,andglobalrelationship attention mechanism. The former shifts the Fourier spec-
+modeling. These characteristics are useful for reliable single-image trum to the center, applies centered low-/high-frequency
+decisionsindeep-seadebrismonitoring:globalcontexthelpsdistin- radial masks, and then reconstructs the feature by inverse
+guish weak debris cues from visually similar backgrounds, set shifting and inverse Fourier transform, whereas the latter
+predictionreducesduplicatedetectionsinclutter,query-levelobject fusesparallelmulti-scaleconvolutions,formsastablespatial
+reasoningissuitableforsmallorirregulartargets,andthesearched low-/high-frequency approximation, and refines the
+architectureprovidesafavorableaccuracy–complexitytrade-offwhen encoderinputthroughoptionalgating,dropout,andresidual
+each transmitted frame is important. Therefore, RF-DETR is a scaling.
+structurally competitive detector for the baseline experiment itself. 3. Wedesignaqueryadaptivereweightingstrategythatlearns
+Itsreal-timecapabilityisretainedasanauxiliarydeploymentbenefit, aboundedscaleforeachbasequery,reusesthesamebase-
+whereasthebaselineselectionisdrivenbyreliability-orientedrepre- query scales across grouped queries during training, and
+sentationanddecodingproperties. strengthensqueryresponseandmatchingstabilityforsmall,
+Based on this motivation, this paper develops Improved RF- weak-texture,andeasilyconfusedtargetsduringdecoding.
+DETR for underwater plastic debris detection. The model intro- 4. We conduct systematic experiments on underwater debris
+ducesanunderwaterfrequency-awarefeaturereweightingmodule, datasets. Comparative experiments, ablation studies, and
+a multi-scale frequency-aware attention module, and a query transfer validation support the effectiveness and practical
+adaptive reweighting module, thereby strengthening feature mod- relevanceoftheproposedmethod.
+eling and query decoding under low-contrast, weak-texture, and
+clutteredconditions. Theremainderofthispaperisorganizedasfollows.Section2
+Themaincontributionsofthispaperareasfollows: reviewscommonobjectdetectionmodels,aswellasrelatedworkon
+underwater object detection and small-object detection. Section 3
+1. We construct the Improved RF-DETR framework for introducesthearchitectureandimprovementsoftheimprovedRF-
+underwater plastic debris detection. While preserving DETRindetail.Section4describestheexperimentalconfigurations
+the end-to-end detection paradigm, the model performs and settings. Section 5 focuses on the experimental results and
+coordinatedoptimizationatthestagesoffeaturemodeling analysisofobservedphenomena.Section6concludesthepaperand
+andquerydecoding. discussesfutureresearchdirections.
+FrontiersinMarineScience 03 frontiersin.org
+
+--- PAGE 4 ---
+Lietal. 10.3389/fmars.2026.1885615
+2 Related work for underwater degradation can materially influence downstream
+performance (Liuet al.,2026). Joint enhancementwithdeformable
+2.1 General object detection frameworks convolution further highlights the interaction between restoration
+and feature extraction (Guo et al., 2025). Other models strengthen
+RecentunderwaterdetectorsincreasinglyborrowfromDETR- target discrimination through enhanced feature extraction, fusion,
+style formulations instead of relying only on convolutional dense and attention-based heads (Li et al., 2025a, b). Viewed collectively,
+predictors. UW-DETR adapts RT-DETR with feature fusion for this literature indicates that degradation handling is most effective
+underwater imagery (Li et al., 2024); Efficient-Deformable-DETR when it is coupled with higher-level feature modeling rather than
+uses deformable attention to keep computation manageable while treatedasaseparatestep.
+improving small-target handling (Xie et al., 2025); and improved In terms of detection backbones, the YOLO family remains the
+RT-DETR variants optimize feature fusion and feature extraction mostwidelyusedchoiceinunderwaterdetection.LFN-YOLOimproves
+whilereducingcomputationalcomplexityandmodelsizetosome small-object recognition through lightweight reparameterization and
+extent(Linetal.,2026).Whatmakesthesemodelsrelevanthereis multi-scale fusion (Liu et al., 2025). DyAqua-YOLO enhances
+thewayglobalrelationalmodelingcompensatesforunreliablelocal recognitioninlow-contrastandclutteredscenesthroughadynamic
+textureandirregularboundaries. adaptive architecture (Li and Peng, 2025). CEH-YOLO improves
+In real underwater scenes, many types of marine debris are performance in complex underwater imagery through composite
+occludedbyotherobjectsormixedwithsurroundingmaterials.As enhancement (Feng and Jin, 2024). Their continued use reflects
+aresult,themodelcannotreliablyidentifythecorrecttargetsbased clearengineeringvalueforembeddedplatforms,onlineinspection,
+only on local regions. A large body of research has shown that andapplicationsthatdemandhighframerates.
+incorporating surrounding background context into the decision
+Formarinedebrisspecifically,researchhasincreasinglyfocused
+process helps resolve ambiguous cues (Gao et al., 2024). For on irregular morphology, blurred boundaries, and confusion with
+example, Liu’s DAB-DETR combines queries with dynamic thesurroundingbackground.Corriganetal.improvelocalcontour
+anchorboxes(Liuetal.,2022);Meng’sConditionalDETRacceler- descriptionthroughinstancesegmentation(Corriganetal.,2023).
+ates convergence by using conditional query constraints (Meng UTNet demonstrates the feasibility of real-time marine debris
+et al., 2021); and Wang’s Anchor DETR optimizes localization recognition from the standpoint of lightweight deployment (Cui
+performancethroughqueryinitializationandspatialpriors(Wang et al., 2025). A YOLOv12-based debris detector and an improved
+etal.,2022). YOLOv11networkreachsimilarconclusions:structuraloptimiza-
+After comparing Transformer detector candidates, this paper tion can improve recognition in complicated underwater scenes
+adopts RF-DETR as the baseline model (Robinson et al., 2026). while retaining the speed advantages of one-stage detectors
+UW-DETR and improved RT-DETR are valuable underwater or (Deluxni and Sudhakaran, 2025; Yuanwei et al., 2026). Even so,
+efficient variants, but their original designs are already tied to existingmethodsstillleavetwogapsforcomplexunderwaterplastic
+specific fusion or efficiency strategies; Efficient-DeformableDETR debrisdetection.First,manyofthemprioritizelightweightdesign,
+mainlyemphasizesdeformableattentionandcomputationcontrol. real-time operation, and frame-rate advantages, whereas deep-sea
+RF-DETR instead offers a more general searched feature pathway monitoring often requires stable single-image prediction under
+withNMS-freesetpredictionandqueryreasoning,whichisbetter limiteddatatransmissionandsparsereacquisition.Second,convo-
+suitedtoevaluatingwhethertheproposedmodulesimprovereliable lution-dominated one-stage detectors remain constrained by local
+single-imagepredictionunderlimiteddatatransmissionandsparse receptive fields when backgrounds are large-scale, targets are
+reacquisition.Frequency-orientedstudiesarealsorelevant:under- irregular,andtexturecuesareweak.DETR-typemodels,especially
+water frequency refinement (Wang et al., 2025) and frequency RF-DETR,arethereforeattractivealternativeswhenend-to-endset
+channel attention (Qin et al., 2021) both support redistributing prediction and global relationship modeling are more critical
+spectral information when contrast is weak. That combination (Robinsonetal.,2026).
+makesRF-DETRanaturalbaseforaddingfrequencyreweighting,
+multi-scale refinement, and query recalibration without abandon- 2.3 Small-object detection
+ingend-to-endprediction.
+Underwaterplasticdebrisdetectionalsoinheritsthechallenges
+2.2 Underwater object detection ofsmall-objectrecognition.Targetssuchasplasticfragments,films,
+and ropes often occupy only a small number of pixels and are
+Underwater object detection must contend with imaging deg- frequently accompanied by occlusion, deformation, and back-
+radation,scalevariation,backgroundinterference,anddeployment ground interference. Under these conditions, edge, texture, and
+constraints. Recent reviews summarize these issues from the per- local structural cues are easily attenuated during deep semantic
+spectives of image quality, small-object difficulty, dataset limita- extraction.Priorworkshowsthatpreservingfine-grainedinforma-
+tions,andpracticaldeployment(Eretal.,2023;Jianetal.,2024). tion and coordinating features across scales are central to reliable
+Alargebodyofworkaddressesdegradationcompensationbefore small-objectrecognition.HTDet demonstratesthevalueofjointly
+orduringdetection.MarineDetNetimprovesmarine-objectdetection modeling global semantics and local detail through a hybrid
+through image-quality enhancement (Lakshmanan et al., 2025). Transformer architecture (Chen et al., 2023). The autoencoding
+Multidistortionmodelinglikewiseshowsthatexplicitcompensation pyramidmethodfurthershowsthatcross-scalefeatureorganization
+FrontiersinMarineScience 04 frontiersin.org
+
+--- PAGE 5 ---
+Lietal. 10.3389/fmars.2026.1885615
+andneighborhoodinformationcanimprovesmall-targetrepresen- stages of Fourier-domain feature reweighting, pre-encoder multi-
+tationincomplexunderwaterenvironments(Zhangetal.,2025). scale enhancement, and query-adaptive reweighting. The resulting
+Frequency-domain modeling provides an additional prior for networkincludesabackbonefeatureextractor,amulti-scalefeature
+small and weak-texture targets. FCANet reconstructs channel construction and enhancement module, a Transformer encoder
+responses through frequency channel attention and shows that decoder, and a prediction head. The proposed additions are the
+frequency information contributes positively to feature selection underwaterfrequency-awarefeaturereweightingmodule(UFFR),the
+(Qinetal.,2021).FourierNeuralOperatorhighlightstheexpressive multi-scalefrequency-awareattentionmodule(MFA),andthequery
+poweroffrequencyspaceforglobalinformationrepresentation(Li adaptivereweightingmodule(QAR).
+et al., 2021). Global Filter Networks emphasize the efficiency of When RF-DETR is transferred from general natural images to
+global modeling through frequency filtering (Rao et al., 2021). In underwater debris detection, three limitations become prominent.
+adjacent visual tasks, high-frequency multispectral attention has First,thebackbonefeaturesdonotexplicitlycontroltheredistribu-
+improved cross-domain generalization (Ying et al., 2025), while tionoflow-andhigh-frequencyinformation,sotarget-relateddetail
+multi-scale frequency-enhanced Transformers and frequency-spa- canbeoverwhelmedbylow-frequencybackgroundcontent.Second,
+tial dual-domain fusion networks show how frequency-aware thefeaturesdeliveredtotheencoderlackadedicatedrefinementstage
+refinement can preserve boundaries and details (Yan et al., 2025; for small targets and cluttered underwater scenes. Third, decoder
+Liu et al., 2024). These studies provide direct motivation for the queriesenterattentionwithidenticalpriorimportance,eventhough
+underwater frequency-aware feature reweighting module and the theirresponsivenesstorealtargetscandiffer.UFFR,MFA,andQAR
+multi-scalefrequency-awareattentionmoduleusedhere. are introduced at these three stages: after the backbone, before the
+Viewed together, prior work on small-object detection under- encoder, and before decoder attention, respectively. The overall
+scores the value of multi-scale representation, frequency-aware architectureisshowninFigure1.
+modeling, and attention-based refinement. For underwater plastic Given an input image, the backbone first extracts deep visual
+debris, however, small object difficulty is entangled with image features.UFFRthenperformsatwo-dimensionalFFT,shiftsthespec-
+degradation,backgroundclutter,irregularmorphology,andlimited trumsothatlow-frequencycomponentsarecentered,appliescentered
+cross-scale semantics. Compared with detectors that rely mainly radiallow-/high-frequencyreweighting,shiftsthespectrumback,and
+onlocalconvolutionalevidenceordensecandidatescreening,RF- reconstructs the feature by inverse FFT. The reweighted features
+DETRisstructurallybetteralignedwiththissetting.Itsend-to-end are passed to the neck to build multi-scale representations. MFA
+set-prediction mechanism reduces the loss of weak targets during is inserted between the neck output and the Transformer encoder.
+candidatescreening,anditsglobalmodelinghelpsdisentanglesmall It applies parallel multi-scale convolutions, averages the branch
+debris from cluttered backgrounds. RF-DETR is therefore both a responses,formsastablespatiallow-/high-frequencyapproximation
+reasonable baseline and a suitable substrate for the frequency through local averaging and residual decomposition, and finally
+reweighting, multi-scale refinement, and query recalibration refines the feature through optional gating, Dropout , and an
+2d
+introducedhere. optional residual connection with a learnable gain. In the decoding
+stage,QARmultiplieseachbasequerybyaboundedlearnablescaling
+coefficient, applies the scales directly to a single query set during
+inference, and shares the same base-query scales across grouped
+3 Methods
+queriesduringtraining.
+With these additions, the detector preserves the end-to-end
+Thissectionpresentsthedetectorfromtheoverallarchitecture behaviorofRF-DETRwhileintroducingcoordinatedrefinementin
+down to the module-level changes that improve its underwater threeplaces:Fourier-domainfeaturebalancing,pre-encodermulti-
+behavior.ThediscussionbeginswithImprovedRF-DETRpipeline scaleenhancement,andquery-siderecalibration.
+and then turns to the three added components: the underwater
+3.2 Underwater frequency-aware feature
+frequency-aware feature reweighting module (UFFR), the multi-
+reweighting module
+scale frequency-aware attention module (MFA), and the query
+adaptive reweighting module (QAR). The following subsections
+tracethesecomponentsintheorderinwhichthenetworkprocesses Convolutional backbone features are learned in the spatial
+information—backbone feature reweighting, pre-encoder multi- domain and do not explicitly regulate the relative influence of
+scale refinement, and decoder-side query recalibration—so that differentfrequencybands.Inunderwaterimagery,thisisproblem-
+their roles can be understood within the end-to-end structure of aticbecauselow-frequencybackgroundenergycandominatewhile
+thebaselinedetector. detail-related frequencies associated with small targets are attenu-
+ated.Recentunderwaterstudiessuggestthatfrequency-levelrefine-
+3.1 Overall framework ment can improve degraded feature representation (Wang et al.,
+2025),andFCANetlikewiseshowsthatfrequencyinformationcan
+Building on RF-DETR (Robinson et al., 2026), this work con- support discriminative feature selection (Qin et al., 2021).
+structs an enhanced end-to-end detector for underwater debris Motivated by these observations, the underwater frequency-aware
+detection in complex scenes. The baseline Transformer detector is feature reweighting module (UFFR) is inserted after the middle-
+retained, while three targeted modifications are introduced at the andhigh-levelbackbonefeatures.Thecorrespondingmathematical
+FrontiersinMarineScience 05 frontiersin.org
+
+--- PAGE 6 ---
+Lietal. 10.3389/fmars.2026.1885615
+FIGURE1
+OverallarchitectureoftheImprovedRF-DETRmodel.
+expressions are given in Equations 1–7. Its structure is shown F ^ =F (F)∈CB(cid:1)C(cid:1)H(cid:1)W (2)
+ortho
+inFigure2.
+where F (·) denotes the two-dimensional FFT with
+Lettheinputfeaturemapbe: ortho
+norm=“ortho”.Thespectrumisthenshiftedtothecenterby
+F∈RB(cid:1)C(cid:1)H(cid:1)W
+(1)
+F ~ =S(F ^ )∈CB(cid:1)C(cid:1)H(cid:1)W (3)
+where B, C, H, andW denote the batch size, number of
+channels, height, and width, respectively. The module expects a where S(·) denotes torch.fft.fftshift(·, dim=(-2,-1)), which
+four-dimensional tensor with channel number C equal to the moves low-frequency components to the center of the spatial-
+configured module width. In the implementation, the input is frequencyplane.
+first cast to fp32 inside an autocast-disabled block, and a two- To construct the centered radial masks, the implementation
+dimensionalFouriertransformwithorthonormalnormalizationis generates a normalized grid on the two spatial axes with
+thenappliedalongthelasttwodimensions: torch.linspace(-1,1,H)andtorch.linspace(-1,1,W),followedbya
+FIGURE2
+Architectureoftheunderwaterfrequency-awarefeaturereweightingmodule.Thepipelineperforms2DFFT,FFTshift,centeredlow-/high-
+frequencymaskreweighting,inverseFFTshift,and2DIFFTreconstruction.
+FrontiersinMarineScience 06 frontiersin.org
+
+--- PAGE 7 ---
+Lietal. 10.3389/fmars.2026.1885615
+torch.meshgridcallwithindexing=“ij”.Theresultingcoordinatesare freq_radius=0.6 and two scalar coefficients, followed by inverse
+shifting and inverse-transform reconstruction. In the present im-
+2(h−1) 2(w−1)
+u =−1+ , v =−1+ , (4) plementation,itseffectcomesfromthiscenteredbandreweighting
+h H−1
+qffiffiffiffiffiffi
+w
+ffiffiffiffiffiffiffiffiffi
+W−1
+ratherthanfromfine-grainedfrequency-selectiveattention.
+r(h,w)= u2+v2
+h w
+whereh=1,…,Handw=1,…,W.Letr denotefreq_radius.In 3.3 Multi-scale frequency-aware attention
+0
+thereportedexperiments,r =0.6,andthecorrespondingmasksare
+0
+The encoder in RF-DETR performs global modeling, but its
+writtenas
+( effectiveness still depends strongly on the quality of the features
+low_mask(h,w)=II(r(h,w)<r ), suppliedbytheneck.Inunderwaterdebrisdetection,smallplastic
+0
+(5)
+high_mask(h,w)=1−low_mask(h,w), fragmentsmaycloselyresembleclutteredbackgroundpatterns,and
+scalevariationfurthercomplicatesdiscrimination.MFAistherefore
+where
+low_mask,high_mask∈RH(cid:1)W
+are two-dimensional placed between the neck and the Transformer encoder to
+masks.Here,low_maskcorrespondstothecenteredcircularregion strengthentheencoderinputthroughparallelmulti-scaleaggrega-
+of the shifted spectrum, and high mask corresponds to the com- tionandastablelow-/high-frequencyapproximationimplemented
+plementaryouterregion. in the spatial domain. Related work has shown that multi-scale
+Twoscalarcoefficients,a low anda high ,arethenusedtoformthe frequency-aware refinement can benefit boundary preservation
+reweightingmask and detail enhancement (Yan et al., 2025; Liu et al., 2024).
+The corresponding mathematical expressions are given in
+M(h,w)=a low_mask(h,w)+a high_mask(h,w): (6)
+low high Equations8–15.ThemodulestructureisshowninFigure3.
+Whenuse_learnable=True,a anda areimplementedas InthebaselineRF-DETR,theneckoutputisforwardedtothe
+low high
+learnable parameters; otherwise, they are fixed buffers. In the encoder after the required transformations, without an explicit
+reportedexperiments,thelearnablesettingisused,withinitializa- refinement stage tailored to underwater small targets and clutter.
+tionvalues0.95and1.55,respectively.Themaskisbroadcastacross MFA replaces this direct path by adding parallel convolutions,
+the batch and channel dimensions and multiplied element-wise branchaveraging, locallow-pass/high-pass decomposition, anop-
+withtheshiftedFourier-domainfeature.Theweightedspectrumis tional spatial gate, dropout regularization, and an optional resid-
+thenshiftedbackandreconstructedbyinverseFFT,giving ualconnection.
+(cid:3) (cid:3) (cid:3) (cid:4)(cid:4)(cid:4) Lettheinputfeaturebe:
+F =Re F−1 S−1 F ~ ȯM ∈RB(cid:1)C(cid:1)H(cid:1)W (7)
+r ortho
+X∈RB(cid:1)C(cid:1)H(cid:1)W
+(8)
+whereS−1(·)denotestorch.fft.ifftshift(·,dim=(-2,-1)),F−1
+(·)
+ortho
+denotestheinversetransformwiththesamenormalization,and M where B, C, H, and W denote the batch size, number of
+∈RH(cid:1)W isbroadcasttoallBbatchesandCchannels. channels, height, and width of the feature map, respectively. The
+UFFRthereforeappliesasharedcenteredlow-/high-frequency moduleexpectsafour-dimensionaltensorwithchannelnumberC
+radial reweighting to the shifted Fourier-domain feature using
+equaltotheconfiguredmodulewidth.
+FIGURE3
+Architectureofthemulti-scalefrequency-awareattentionmodule.Parallelmulti-scaleconvolutionsareaveraged,decomposedintolow-andhigh-
+frequencyspatialcomponents,andthenrefinedbyoptionalgating,dropout,andresidualscaling.
+FrontiersinMarineScience 07 frontiersin.org
+
+--- PAGE 8 ---
+Lietal. 10.3389/fmars.2026.1885615
+Multiple convolution branches with diffe(cid:5)rent(cid:6)receptive fields 3.4 Query adaptive reweighting module
+produce a set of spatial representations. Let F(k) K denote the
+k=1
+outputs of the K branches, where each
+F(k)∈RB(cid:1)C(cid:1)H(cid:1)W.
+In the In standard DETR-style decoding, a fixed set of queries is
+reported implementation, K = 3 and the branch kernels are 5×5,
+processed with equal prior importance. That assumption can be
+7×7,and9×9,correspondingtomfascales=(1,2,3).Thefusedmulti-
+restrictive in underwater scenes, where only some queries may
+scalefeatureisobtainedbyaveragingthebranchoutputs:
+respond well to small, dense, or low-contrast targets. The query
+adaptivereweightingmodule(QAR)addressesthisissuebylearninga
+X ms = K
+1 oK F(k)∈RB(cid:1)C(cid:1)H(cid:1)W
+(9) bounded scale for each base query index before attention is com-
+k=1
+puted. The design is related to prior work on query priors and
+The fused feature is then decomposed into a smoothed low- conditional query construction (Liu et al., 2022; Meng et al., 2021;
+frequencytermandaresidualhigh-frequencyterm: Wangetal.,2022).Thecorrespondingmathematicalexpressionsare
+giveninEquations16–19.ItsstructureisshowninFigure4.
+X low =AvgPool(X ms
+)∈RB(cid:1)C(cid:1)H(cid:1)W
+(10) TheoriginalRF-DETRusesafixednumberofqueriesanddoes
+3(cid:1)3
+not explicitly distinguish their relative importance before decoder
+X =X −X (11) attention.QARisinsertedbetweenthedecoderinputqueriesand
+high ms low
+thesubsequentattentioncomputation,whereitrescalestheoriginal
+A scalar frequency-balancing coefficient a
+mfa
+∈R scales the querytensorthroughquery-wisecoefficients.Inthecurrentimple-
+high-frequencyresidual: mentation,these coefficients arelearned parameters shared across
+samplesratherthanper-imagedynamicpredictions.
+X =X +a X
+∈RB(cid:1)C(cid:1)H(cid:1)W
+(12)
+freq low mfa high LettheinputquerytensoroftheTransformerdecoderbe:
+In the reported experiments, a = 0.75. This operation
+mfa Q∈RB(cid:1)N(cid:1)d
+(16)
+provides a stable frequency-aware approximation in the spatial
+domainratherthananexplicitFourier-domainspectrumscaling. whereBdenotesthebatchsize,Ndenotesthenumberofquery
+Whenthegatebranchisenabled,a1×1convolutiongeneratesa vectors,andddenotesthefeaturedimension.
+single-channelgatefromX freq : Let N q denote the number of base queries, and let G denote
+group_detr.Themodulemaintainsalearnablelogitvector ∈RNg
+G=s(Conv 1(cid:1)1 (X freq
+))∈½0,1(cid:3)B(cid:1)1(cid:1)H(cid:1)W
+(13) whoseboundedquery-wisescalesarewrittenas
+(
+X freq ⨀G, if the gate branch is enabled, s∈RNq,s i =s min +(s max −s min ) s(‘ i ), (17)
+X gate = (14) i=1,2,…,N
+X , otherwise, q
+freq
+where s(·) denotes the Sigmoid activation function, and ⨀ where s(·) denotes the Sigmoid function. In the reported
+experiments, s = 0.5, s = 2, and s = 1. The learnable
+denoteselement-wisemultiplication.BecauseGhasasinglechan- min max init
+logits are initialized by applying the inverse-Sigmoid mapping to
+nel, it is broadcast along the channel dimension when multiplied
+thenormalizedinitialscaleafterclippingitto(10
+−4,1−10 −4).
+withX .
+freq Duringinferenceorevaluation,whenN=N ,sisreshapedto
+Finally,Dropout regularizesthegatedfeature,andanoptional q
+2d R1(cid:1)Nq (cid:1)1
+and broadcast across the batch and feature dimensions.
+residual connection with learnable scalar gain g produces the
+Theresultingscaledquerytensoris
+output:
+8 >>< X+g Dropout
+2d
+(X
+gate
+), Q 0 b,i,j =s i Q b,i,j ,b=1,…,B, i=1,…,N q , j=1,…,d (18)
+X out = >>: if the residual branch is enabled,
+tens
+D
+or
+u
+i
+r
+s
+in
+fi
+g
+rst
+tr
+r
+a
+e
+i
+s
+n
+h
+i
+a
+n
+p
+g
+ed
+w
+t
+i
+o
+th
+Q ~
+g
+∈
+rou
+R
+p
+B
+e
+(cid:1)
+d
+G(cid:1)
+q
+N
+u
+q (cid:1)
+er
+d
+i
+,
+e
+a
+s
+n
+,
+d
+w
+t
+h
+h
+e
+e
+n
+sa
+N
+me
+=
+ba
+N
+se
+q G
+-q
+,
+u
+t
+e
+h
+ry
+e
+Dropout (X ), otherwise,
+2d gate
+scalesaresharedacrossallGgroups:
+(15)
+In the reported experiments, both the gate and residual Q ~0 =s Q ~ , b=1,…,B, g =1,…,G, i
+b,g,i,j i b,g,i,j
+branches are enabled, the dropout rate is 0.15, and g is initialized
+=1,…,N , j=1,…,d: (19)
+to 10 −3. A final torch.nan_to_num operation is applied in the q
+implementationfornumericalstabilization.Theoptionalvisualiza- Aftergroupedscaling,thetensorisreshapedbacktoRB(cid:1)N(cid:1)d.If
+tionbranchonlystoresintermediatetensorsanddoesnotalterthe N is neither N nor N G, the implementation raises a shape-
+q q
+forwardcomputation. mismatch error. A final torch.nan_to_num operation is applied
+Asimplementedhere,MFAderivesitseffectfromthecombina- fornumericalstabilization.
+tion of multi-scale spatial aggregation, local low-/high-frequency QARthereforeintroducesdifferentiatedquerymodulationinstead
+decomposition, optionalgatedspatialrefinement, dropoutregulari- of treating all queries as equally informative. In the present imple-
+zation,andresidualscaling.Itisthereforeafrequency-awarespatial mentation, this effect comes from bounded learnable base-query
+approximationratherthanaFourier-domainattentionblock. priors shared across samples, reused directly for single-group
+FrontiersinMarineScience 08 frontiersin.org
+
+--- PAGE 9 ---
+Lietal. 10.3389/fmars.2026.1885615
+FIGURE4
+Architectureofthequeryadaptivereweightingmodule.Base-queryscalesaregeneratedfromboundedlearnablelogits,applieddirectlytoasingle
+querysetduringinference,andsharedacrossgroupedqueriesduringtraining.
+inference,andsharedacrossgroupedqueriesduringtraining,which The DeepTrashdataset contains 2,866 images in total, including
+canimprovematchingstabilityandreduceinterferenceinclassifica- 2,151trainingimagesand715testimages(Tataetal.,2021).Itcontains
+tionandlocalization,particularlyforsmallordifficulttargets. only one target class, Plastic. The images are selected from aquatic
+plastic-debris field videos captured at different California locations,
+including South Lake Tahoe, Bodega Bay, and San Francisco Bay.
+DeepTrashdoesnotoverlapwithTrashCaninimagecontent,andits
+4 Experimental setup
+one-classlabelspacediffersfromthe22-categoryTrashCansetting.
+In this paper, the ablation experiments and part of the com-
+Thissectiondetailstheexperimentalprotocolusedtoevaluate parativeexperimentsareconductedonTrashCan,whilethetransfer
+theproposeddetector.Itfirstintroducesthedatasetsanddatasplits experimentisconductedonDeepTrash.Inthetransferexperiment,
+usedforin-domaintrainingandtransferfine-tuning,thendefines the proposed model keeps the hyperparameter configuration re-
+the evaluation metrics, and finally describes the computational portedinSubsection4.4unchangedwhenmovingfromTrashCan
+environment and training configuration. The aim is to keep the to DeepTrash, and the weights trained on the 22-class TrashCan
+reportedresultstransparentandreproducible. datasetareloadedfirst.BecauseDeepTrashcontainsonlythePlastic
+class,thecategorypredictionheadisreplacedwithaone-classhead
+4.1 Datasets and reinitialized before target-domain fine-tuning. The remaining
+comparison models follow the same configuration policy used in
+This paper uses two underwater debris datasets. TrashCan- the comparative evaluation: their official recommended default
+Instance serves as the source dataset for model training, ablation settingsareretainedandthetrainingepochnumberisunifiedto50.
+experiments, and the main comparative evaluation (Hong et al.,
+2020), whereas DeepTrash (Tataet al.,2021)is used as thetarget 4.2 Evaluation metrics
+datasetfortransferfine-tuningandtesting.
+TrashCan-Instance contains 7,212 annotatedimagesspanning Inthispaper,Precision(P),Recall(R),F1-score,meanAverage
+22 categories. For this work, the dataset is randomly split into Precision(mAP),gigafloating-pointoperations(GFLOPs),andthe
+training, validation, and test subsets at 70%:20%:10%, yielding number of parameters are used to evaluate model effectiveness.
+5,048, 1,442, and 722 images, respectively. The random seed is Precision reflects the accuracy of positive predictions, whereas
+fixed at 42. As a public underwater debris benchmark, TrashCan Recall measures the ability to identify positive samples. The F1-
+mainly covers three broad groups of targets: underwater debris, scoreistheweightedharmonicmeanofPrecisionandRecall,and
+remotely operated vehicles, and benthic fauna and flora (Hong mAP represents the mean Average Precision across all categories.
+etal.,2020).MostimagesoriginatefromtheJ-EDIdataset,andwere GFLOPs is a commonly used indicator for measuring computa-
+extractedfromvideoscollectedovermanyyearsintheSeaofJapan tional complexity, and the number of parameters indicates model
+by JAMSTEC-operated ROVs. The class-instance distribution of size.Thesemetricsarewidelyusedforevaluatingobjectdetection
+TrashCanisshowninFigure5. tasks,andtheirformulasaregiveninEquations20–24.
+FrontiersinMarineScience 09 frontiersin.org
+
+--- PAGE 10 ---
+Lietal. 10.3389/fmars.2026.1885615
+FIGURE5
+CategorydistributionofinstancesintheTrashCandataset.Source:BasedondatafromHongetal.(2020).
+TP 4.3 Experimental parameters
+P= (20)
+TP+FP
+All experiments were conducted on an ASUS TUF Gaming 5
+TP ProlaptoprunningWindows11.Thesystemwasequippedwithan
+R= (21)
+TP+FN
+Intel Core i9-14900HX processor at 2.2 GHz, 48 GB of system
+memory,andanNVIDIAGeForceRTX4060LaptopGPUwith8
+P·R
+F1=2· (22) GBofvideomemory.TrainingwasimplementedinPyTorch2.5.1
+P+R
++cu121,andtheCUDAdriverversionwas12.9.Thedetectorwas
+8Z built on the DETR-based PyTorch implementation released by
+>>>< 1
+P(r) dr, continuous PR curve Roboflow. To reduce fluctuations caused by random initialization
+AP=
+0
+(23)
+anddatapartitioning,therandomseedwasfixedat42inallformal
+>>>:oN
+P DR , discrete PR curve experimentsexceptduringtheOptunasearchstage.
+n n
+n=1
+4.4 Training strategy and hyperparameter
+settings
+1 oK
+mAP= AP(i) (24)
+K
+i=1 TrainingusestheAdamWoptimizertogetherwithalearning-
+Here, TP, FP, TN, and FN represent the numbers of true rateschedulethatcombineswarmupandcosineannealing.During
+positives,falsepositives,truenegatives,andfalsenegatives,respec- theinitialiterations,thelearningrateisgraduallyincreasedfroma
+tively.P(r)representstheprecision–recallcurve,andKdenotesthe small value to the preset initial value in order to stabilize early
+number of classes in the current recognition task. In object optimization.Itisthenprogressivelydecayedbycosineannealing.
+detection tasks, mAP depends on the selected Intersection over Automatic mixed precision (AMP) is enabled to reduce GPU
+Union(IoU)threshold.Inparticular,mmAP@50referstothemean memory usage and improve training efficiency, and gradient clip-
+AveragePrecisionachievedwhentheIoUthresholdissetto0.5. pingisappliedtosuppressabnormalupdates.
+FrontiersinMarineScience 10 frontiersin.org
+
+--- PAGE 11 ---
+Lietal. 10.3389/fmars.2026.1885615
+Ratherthanrelyingonlyonmanuallyselectedsettings,thispaper mfa_freq_alpha=0.75, mfa_dropout=0.15, gate=True, residual=True,
+usestheOptunaframeworkwithBayesianoptimizationtosearchfor enable_vis=False, and residual gain initialization init_scale=10
+−3.
+suitablehyperparametersautomatically.Thesearchisperformedon QAR uses query_scale_init=1, scale_min=0.5, scale_max=2,
+TrashCanwiththeTPEsamplerandthemedianprunerfor50trials, scale_lr_factor=1, and group_detr=13; during training, the same
+usingvalidationmAP@50astheoptimizationtarget.Thesearchspace base-query scales are shared across the 13 grouped query sets,
+includesinputresolution,batchsize,basefeaturedimension,learning whereas inference uses a single query group with N = 300. These
+rate,weightdecay,dropoutrate,gradient-clippingthreshold,andthe settingsremainalignedwiththeRF-DETRtrainingparadigmwhile
+numberoftrainingepochs.Thefinalconfigurationisinputresolution better matchingthe presenttask, which requires bothclassification
+384×384,batchsize8,basefeaturedimension12,learningrate8.02× stabilityandaccuratelocalization.
+10
+−5,
+weight decay 1.63 × 10
+−5,
+dropout rate 0.25, gradient-clipping
+threshold 0.19, and a maximum training epoch number of 50. The
+384×384inputresolutionisusedbecauseitistheresolutionselected
+5 Results
+bythehyperparametersearchunderthevalidationmAP@50objective
+andbecauseitprovidesapracticalbalancefortheavailable8GBGPU.
+Compared with smaller inputs, it preserves more spatial detail for 5.1 Ablation study
+small and low-contrast debris after resizing; compared with larger
+inputs, it avoids excessive memory consumption, unstable batch Toverifythedetectionperformanceoftheproposedmodeland
+sizing, and a disproportionate increase in training and inference explore the influence of different modules, ablation experiments
+cost. Therefore, this resolution is treated as a compromise among were conducted based on RF-DETR. The results are shown in
+small-target detail preservation, detection accuracy, GPU memory Table 2, where the best results are highlighted in bold. Group 1
+usage,andcomputationalefficiencyratherthanasanarbitrarysetting. evaluatestheoriginalRF-DETRbaseline,andGroups2–8introduce
+Early stopping is also enabled. When the monitored metric fails to UFFR,MFA,andQAReitherindividuallyorincombination.From
+improve by at least 0.01 for several consecutive epochs, training is the baseline model to the final Improved RF-DETR model, all
+terminated andthe parameters correspondingtothe best validation ablation groups use the same hyperparameter configuration, and
+mAP@50areretained.Unlessotherwisestated,experimentsinvolving the specific numerical values are reported in Subsection 4.4. Only
+theproposedmodelanditsablationvariantsusethisconfiguration. themodulecompositionischangedacrossgroups,ensuringthatthe
+For the network and loss configuration, the backbone is set to differences in Table 2 reflect theeffects of UFFR, MFA, and QAR
+dinov2_windowed_small.ThenumberofViTbackbonelayersis12, ratherthanhyperparametervariation.
+and the number of decoder layers is 2. Both num_queries and The original model achieves 83.59% Precision, 70% Recall,
+num_select are set to 300, and group_detr is set to 13. The loss 76.2% F1, 82.98% mAP@50, and 60.53% mAP@50:95.
+functionjointlyoptimizesclassificationloss,bounding-boxregression Introducing a single module improves the baseline in different
+loss, and GIoU loss, where cls_loss_coef, bbox_loss_coef, and ways.UFFRraisesRecallto77%andmAP@50to88.05%,indicat-
+giou_loss_coefaresetto1,5,and2,respectively,whileauxiliaryloss ing that frequency-aware reweighting helps recover weak debris
+isretained.Inaddition,ia_bce_lossisenabled,varifocallossisdisabled, cues. MFA obtains the highest single-module Precision of 88.28%
+andfocal_alphaissetto0.25.InHungarianmatching,set_cost_class= and improves mAP@50:95 to 67.26%, showing stronger feature
+2,set_cost_bbox=5,andset_cost_giou=2.Fortheaddedmodules, discrimination and localization quality. QAR increases Recall to
+UFFRusesfreq_radius=0.6anduse_learnable=True,withalpha_low 81%andF1to82.33%,whichsuggeststhatquery-levelreweighting
+and alpha_high initialized to 0.95 and 1.55, respectively. In the isespeciallyusefulforreducingmisseddetections.
+forwardpass,UFFRappliesfftshiftbeforecenteredmaskreweighting Thecombined-moduleresultsfurtherclarifythedifferentroles
+and ifftshift before inverse FFT. MFA uses mfascales=(1,2,3), of the three modules and their interaction. UFFR mainly
+TABLE2 AblationstudyontheTrashCandataset.
+U
+M Q
+F
+Group F A P R F1 mAP@50 mAP@50:9 5FPS
+F
+A R
+R
+1 83.59 70 76.2 82.98 60.53 51.25
+2 ✓ 84.85 77 80.74 88.05 66.24 50.03
+3 ✓ 88.28 76 81.68 88.58 67.26 43.76
+4 ✓ 83.71 81 82.33 88.68 66.91 41.29
+5 ✓ ✓ 89.59 81 85.08 90.08 70.39 45.19
+6 ✓ ✓ 83.04 85 84.01 89.64 69.29 42.33
+7 ✓ ✓ 87.04 85 86.01 91.32 68.54 50.82
+8 ✓ ✓ ✓ 93.11 81 86.63 91.84 69.92 49.86
+✓indicatestheintroducedmodule,andthebestresultsarehighlightedinbold.Source:BasedondatafromHongetal.(2020).
+FrontiersinMarineScience 11 frontiersin.org
+
+--- PAGE 12 ---
+Lietal. 10.3389/fmars.2026.1885615
+strengthens degraded frequency cues: used alone, it raises Recall introducestructure-relatedbias.Therefore,theotherdetectorsare
+from70%to77%andmAP@50from82.98%to88.05%,andwhen notre-tunedwiththeproposedmodel’soptimalhyperparameters;
+pairedwithMFAorQARithelpsbothtwo-modulevariantsreach instead, their official default configurations are retained for a
+the highest Recall of 85%. MFA contributes more to feature relativelyconsistentandreproduciblecomparison.
+discrimination and localization quality: used alone, it gives the On TrashCan, Improved RF-DETR records the highest
+highest single-module Precision of 88.28% and mAP@50:95 of Precision (93.11%), F1-score (86.63%), mAP@50 (91.84%), and
+67.26%, and the MFA+QAR combination further obtains the mAP@50:95(69.92%)inthecomparisonset.FasterR-CNNobtains
+overall best mAP@50:95 of 70.39%. QAR mainly improves query thehighestRecallof84.52%,buttheproposedmodelremainsonly
+matchingandmissed-targetrecovery:usedalone,itraisesRecallto 3.52 percentage points lower in Recall while surpassing Faster R-
+81% and F1 to 82.33%, and its combination with UFFR reaches CNNby6.21pointsinPrecision,0.93pointsinF1,2.96pointsin
+91.32% mAP@50. When all three modules are used together, the mAP@50, and 0.92 points in mAP@50:95. This indicates that the
+model does not maximize every single metric, but it achieves the proposeddetectorfavorsastrongeroveralldetectionbalancerather
+strongest overall metric performance, with the best Precision thanmaximizingRecallalone.
+(93.11%), F1-score (86.63%), and mAP@50 (91.84%) while main- AmongtheYOLObaselines,thenewlyaddedYOLOv8sisthe
+taining49.86FPS.ComparedwiththeoriginalRF-DETRbaseline, strongestYOLOvariantonF1,mAP@50,andmAP@50:95,reach-
+ImprovedRF-DETRimprovesPrecision,Recall,F1,mAP@50,and ing 85.07%, 88.19%, and 68.53%, respectively. YOLO26s provides
+mAP@50:95 by 9.52, 11, 10.43, 8.86, and 9.39 percentage points, the highest YOLO Recall of 84.02%, whereas YOLOv8n gives the
+respectively, showing that frequency reweighting, multi-scale re- highest YOLO Precision of 88.28%. Even against YOLOv8s,
+finement,andqueryrecalibrationactcomplementarilyratherthan Improved RF-DETR improves Precision, F1, mAP@50, and
+simplyaddingredundantcapacity. mAP@50:95 by 5.83, 1.56, 3.65, and 1.39 percentage points,
+respectively. The Recall of YOLOv8s is 1.97 points higher, but its
+5.2 Comparative evaluation overall metric performance remains lower than that of the pro-
+poseddetector.
+Improved RF-DETR is compared with Faster R-CNN, SSD, Figure 6 makes the accuracy–complexity trade-off clearer.
+YOLOv8n, YOLOv8s, YOLOv11n, YOLOv11s, YOLO26n, YOLO26n,YOLOv11n,and YOLOv8n occupy the extremelylight-
+YOLO26s, and RT-DETR on TrashCan. Table 3 contains the weightregion,whereasYOLO26s,YOLOv11s,andYOLOv8sfillthe
+numerical comparison, and Figure 6 places those results against middlerangebetweennanomodelsandlargerdetectors.Compared
+model size and computation. The inclusion of YOLOv8s and with YOLOv11s, Improved RF-DETR uses a similar amount of
+YOLOv11s makes the comparison cover both nano-scale and computation (21.98 versus 21.7 GFLOPs) but improves F1 and
+small-scale YOLOvariants. To ensure consistency and reproduci- mAP@50 by 2.21 and 3.94 points. Compared with YOLOv8s, the
+bility,allcomparisonmodelsexcepttheproposedmodelaretrained proposedmethodusesfewerGFLOPs(21.98versus28.7)whilestill
+with their official recommended default parameter configurations, obtaininghigherF1andmAP@50.RelativetoRT-DETR,itreduces
+and their training epoch number is uniformly set to 50. The computationfrom109GFLOPsto21.98GFLOPswhileimproving
+proposed model uses the final hyperparameters obtained by F1 from 77.9% to 86.63% and mAP@50 from 84.65% to 91.84%.
+Optuna because the three task-specific modules are strongly cou- Therefore, the proposed detector occupies a favorable region in
+pled with its network structure and training behavior. Directly Figure6:itisnotthesmallestmodel,butitprovidesthebestaccuracy
+transferring these optimized values to other detectors could amongtheevaluateddetectorsatmoderatecomputationalcost.
+TABLE3 ComparisonofdetectorperformanceontheTrashCandataset.
+Dataset Model Precision Recall F1 mAP@50 mAP@50:95 Parameters/M GFLOPs
+FasterR-CNN 86.9 84.52 85.7 88.88 69 41.4 135
+SSD 86.55 84 85.26 87.37 68.4 24.31 116.2
+YOLOv8n 88.28 80.9 84.43 87.08 66.09 3.01 4.05
+YOLOv8s 87.28 82.97 85.07 88.19 68.53 11.13 28.7
+YOLOv11n 85.93 82.63 84.25 87.51 66.91 2.58 3.1
+TrashCanDataset
+YOLOv11s 86 82.9 84.42 87.9 66.9 9.8 21.7
+YOLO26n 82.82 75.16 78.81 82.51 62.58 2.37 2.6
+YOLO26s 85.05 84.02 84.53 87.88 67.78 9.47 10.28
+RT-DETR 84.86 72 77.9 84.65 61.57 32.8 109
+OURS 93.11 81 86.63 91.84 69.92 28.87 21.98
+Thebestresultsarehighlightedinbold.
+FrontiersinMarineScience 12 frontiersin.org
+
+--- PAGE 13 ---
+Lietal. 10.3389/fmars.2026.1885615
+FIGURE6
+Complexity–performancecomparisonofdifferentdetectorsontheTrashCandataset.(A–D)showtherelationshipsofGFLOPswithmAP@50,
+GFLOPswithF1,ParameterswithmAP@50,andParameterswithF1,respectively.Source:BasedondatafromHongetal.(2020).
+5.3 Transfer experiment tuningonthe2,151-imageDeepTrashtrainingsplitandevaluationon
+the715-imagetestsplit.Fortheremainingdetectors,thesamepolicyas
+ThetransferexperimentusesTrashCanasthesourcedatasetand thecomparativeevaluationisused:theirofficialrecommendeddefault
+DeepTrash as the target dataset. For Improved RF-DETR, the configurationsareretainedandthetrainingepochnumberissetto50.
+hyperparameter configuration in Subsection 4.4 is kept unchanged Therefore, Table 4 reports transfer fine-tuning under unchanged
+duringthetransferfromTrashCantoDeepTrash,andthecheckpoint proposed-model hyperparameters and official-default comparison
+trainedonTrashCanisloadedbeforetarget-domainadaptation.Since settingsratherthandirectzero-shotinferenceonDeepTrash.
+DeepTrashcontainsonlythePlasticclass,theoriginal22-classcategory After transfer fine-tuning on DeepTrash, Improved RF-DETR
+head is replaced with a one-class head and reinitialized before fine- reaches 91.67% Precision, 79% Recall, 84.86% F1, 86.23% mAP@50,
+TABLE4 TransferexperimentresultsontheDeepTrashdataset.
+Dataset Model Precision Recall F1 mAP@50 mAP@50:95 Parameters/M GFLOPs
+DeepTrashDataset YOLOv8n 84.67 73.7 78.81 81.93 49.54 3.01 4.04
+YOLOv8s 89.02 75.72 81.84 85.27 52.46 11.13 14.22
+YOLOv11n 86.98 74.37 80.18 84.08 51.36 2.58 3.16
+YOLOv11s 85.73 76.01 80.58 83.25 49.99 9.41 10.65
+YOLO26n 88.85 78.02 83.08 85.05 53.65 2.38 2.6
+YOLO26s 90.59 74.86 81.98 84.97 53.09 9.47 10.26
+RT-DETR 91.48 73 81.2 81.83 52.16 36.4 89.1
+OURS 91.67 79 84.86 86.23 55.06 28.82 31.35
+Thebestresultsarehighlightedinbold.Source:BasedondatafromHongetal.(2020).
+FrontiersinMarineScience 13 frontiersin.org
+
+--- PAGE 14 ---
+Lietal. 10.3389/fmars.2026.1885615
+and 55.06% mAP@50:95. It ranks first in all five detection metrics The updated RT-DETR row changes the interpretation of the
+amongthecompareddetectors.RelativetoYOLOv11n,Improved mAP@50:95metric.ImprovedRF-DETRisnowhighestonmAP@
+RF-DETR improves Precision, Recall, F1, mAP@50, and mAP@ 50:95, followed by YOLO26n at 53.65%, YOLO26s at 53.09%,
+50:95by4.69,4.63,4.68,2.15,and3.7points,respectively.Relative YOLOv8sat52.46%,andRT-DETRat52.16%.Underthistransfer
+totheupdatedRT-DETRresults,ImprovedRF-DETRimprovesthe setup,ImprovedRF-DETRthereforeprovidesthestrongestoverall
+samefivemetricsby0.19,6,3.66,4.4,and2.9points,respectively, metricperformanceontheone-classDeepTrashtargetdataset.
+whileusing7.58Mfewerparametersandreducingcomputationby Theseresultsshouldbeinterpretedasatransferexperiment.The
+57.75GFLOPs. detector reuses representations learned from TrashCan and then
+The YOLO variants show different transfer behaviors. adapts a reinitialized one-class head to the DeepTrash Plastic label.
+YOLO26nremainsthemostefficientdetector,with2.38Mparam- Thecomparisonreflectsperformanceafterthistrainingprocedure,not
+eters and 2.6 GFLOPs, and it obtains the second-highest mAP@ directuseofasource-trainedmodelwithoutDeepTrashfine-tuning.
+50:95of53.65%.YOLOv8sachievesthehighestYOLOmAP@50of
+85.27%, while YOLO26s gives the highest YOLO Precision of 5.4 Qualitative results and error analysis
+90.59%. Even so, Improved RF-DETR remains higher than all
+YOLO variants on Precision, Recall, F1, mAP@50, and mAP@ Figure7contrastspredictionsfromthebaselineRF-DETRand
+50:95aftertransferfine-tuning. ImprovedRF-DETRonrepresentativedifficultsamples.Green,red,
+FIGURE7
+ComparisonofdetectionresultsbetweenthebaselineRF-DETRandtheImprovedRF-DETR(A–H).Green,red,blue,andyellowboxesdenotetrue
+positives,falsepositives,falsenegatives,andduplicatedetections,respectively.Source:BasedondatafromHongetal.(2020).
+FrontiersinMarineScience 14 frontiersin.org
+
+--- PAGE 15 ---
+Lietal. 10.3389/fmars.2026.1885615
+blue, and yellow boxes denote true positives (TP), false positives Crowded cases make the difference clearer. Once targets lie
+(FP),falsenegatives(FN),andduplicatedetections,respectively. closetogether,thebaselineproducesmoremisses,duplicateboxes,
+These box labels are obtained by matching model predictions andstraypositives,whereasImprovedRF-DETRretainsmoretrue
+with manually annotated ground-truth boxes. A predicted box is objectsandsuppressesredundantdetections.Thegainisnotlimited
+countedasaTPandmarkedingreenonlywhenitsIoUwiththe to stronger target emphasis; the examples also suggest cleaner
+correspondingground-truthboxishigherthanthepresetthreshold separation between adjacent instances and surrounding clutter,
+andthecategorylabelsareconsistent.Apredictionthatcannotbe whichisconsistentwiththeintendedinteractionamongfrequency
+matched to any ground-truth object in both spatial overlap and reweighting,multi-scalerefinement,andqueryrecalibration.
+categorylabeliscountedasanFPandmarkedinred.Ifaground- Figure 8 presents the feature response heatmap comparison
+truth object has no matched prediction satisfying both the IoU designed for the baselineRF-DETR, the three two-module variants,
+thresholdandcategory-consistencyrequirement,theground-truth andImprovedRF-DETR.Intheupdatedlayout,thefirstcolumnlists
+annotation box is marked as an FN in blue, indicating a missed the input/model settings from top to bottom, and the remaining
+target.Forthesameground-truthobject,whenmultiplepredicted columnsproviderepresentativeheatmapexamples.Thisvisualization
+boxessatisfythematchingconditions,onlythepredictionwiththe is used to examine whether the complete model produces more
+highest confidence orbestmatching quality is retained asthe TP; concentrated responses on debris regions while suppressing back-
+theremainingpredictionsthatrepeatedlymatchthesameobjectare groundactivationsmoreeffectivelythanpartialmodulecombinations.
+markedasduplicatedetectionsinyellow. Figure 9 further compares YOLOv11n, RT-DETR, YOLO26n,
+When only a few objects are visible, the baseline still misses YOLO26s,andImprovedRF-DETRonrepresentativesamples.The
+targets that the proposed model recovers. The same images also updatedfigurearrangestheoriginalimageanddetectorresultsfrom
+show tighterconcentration ontarget regions inbothbrighterand top to bottom in the order Original, YOLOv11n, RT-DETR,
+dimmerscenes,withlessresponsespillingintonearbybackground. YOLO26n, YOLO26s, and Improved RF-DETR, rather than from
+FIGURE8
+FeatureresponseheatmapcomparisonamongthebaselineRF-DETR,two-modulevariants,andImprovedRF-DETR.Thefirstcolumnliststheinput/
+modelsettingsfromtoptobottom,andthefourremainingcolumnsshowrepresentativeheatmapexamplesfromlefttoright.Warmercolors
+indicatestrongerfeatureresponses.Source:BasedondatafromHongetal.(2020).
+FrontiersinMarineScience 15 frontiersin.org
+
+--- PAGE 16 ---
+Lietal. 10.3389/fmars.2026.1885615
+FIGURE9
+ComparisonofrepresentativedetectionresultsacrossfivedetectorsontheTrashCandataset.Thefirstcolumnliststheoriginalimageanddetectors
+fromtoptobottom,andthefourremainingcolumnsshowthecorrespondingrepresentativeexamplesfromlefttoright.Source:Basedondata
+fromHongetal.(2020).
+lefttoright.YOLOv11nandYOLO26nmoreoftenmissadjacentor SeveralcategoriesshowunusuallystrongvaluesinTable5.trash
+low-contrasttargets,withYOLOv11nalsoshowingstrongerback- clothing, trash bottle, trash snack wrapper, and trash cup all reach
+groundconfusionwhenobjectsarecrowdedorpartlyoccluded.RT- 100% Precision and 100% Recall, and their mAP@50:95 values are
+DETRmoreoftenproducesduplicateboxesorunstableboundaries, 86.29%,89.68%,86.2%,and75.17%,respectively.Theseresultsshould
+whereasYOLO26sismorebalancedbutstillleavessomeambiguous beinterpretedtogetherwiththecategorysplitstatistics:trashclothing
+smallinstancesunresolved. has64training,11validation,and7testinstances(82total);trashbottle
+ImprovedRF-DETRkeepsthemostconsistentcompromise has79,25,and22instances(126total);trashsnackwrapperhas56,16,
+amongcoverage,localization,andduplicatesuppressionacross and12instances(84total);andtrashcuphas40,15,andonly4test
+these examples. In the first and third groups it better retains instances(59total).Thesefourcategoriesthereforehavelimitedtotal
+small neighboring targets, while in the second and fourth samplesizes,andthefinaltestsubsetsareevensmaller.Asaresult,a
+groups occasional duplicate detections are still visible. These smallnumberofcorrectlylocalizedtestinstancescanproduceexcep-
+remaining errors indicate that dense layouts, confused bound- tionallyhighPrecisionandRecall,sotheapparentlyexcellentvaluesfor
+aries, and clutter continue to challenge all models, but the thesecategoriesshouldbetreatedassample-size-sensitiveresultsrather
+qualitative behavior of the proposed detector is still the most thanasevidencethatthesecategoriesarealwayseasy.
+stable overall. Lowerscoresclusteraroundcategoriesthatarethin,deforma-
+ble, or visually entangled with the background. animal shells and
+5.5 Category-wise performance analysis animaletcfallto69%and66%Recall,trashtarpandtrashnetstay
+at 72% Recall, and mAP@50:95 drops to 43.86% for trash rope,
+Table 5 lists category-wise Precision, Recall, mAP@50, and 51.18%foranimalstarfish,and53.27%foranimalshells.Theseare
+mAP@50:95 for Improved RF-DETR on TrashCan, and Figure 10 precisely the classes for which uncertain boundaries and seafloor
+extends the comparison to six baseline detectors: YOLO26n, RT- resemblancemakebothlocalizationandclassificationharder.
+DETR, YOLOv11n, YOLOv8n, YOLO26s, and RF-DETR. Panels TheorderinginFigure10changessubstantiallywithbothmetrics
+(A)–(D) correspond to Precision, mAP@50, mAP@50:95, and andcategories,sothestrongestdetectorforoneclassorthresholdis
+Recall,respectively. not always strongest for another. Panels (A), (B), and (D) are
+FrontiersinMarineScience 16 frontiersin.org
+
+--- PAGE 17 ---
+Lietal. 10.3389/fmars.2026.1885615
+TABLE5 Category-wiseperformanceofImprovedRF-DETRontheTrashCandataset.
+Class Precision(%) Recall(%) mAP@50(%) mAP@50:95(%)
+rov 98.53 92 96.65 84.84
+plant 93.18 91 89.42 56.82
+animalfish 100 93 97.27 72.13
+animalstarfish 85.71 81 87.77 51.18
+animalshells 85.37 69 86.84 53.27
+animalcrab 85.19 88 87.36 63.84
+animaleel 89.47 83 88.77 61.99
+animaletc 78.57 66 82.74 57.77
+trashclothing 100 100 100 86.29
+trashpipe 100 91 91.09 79.76
+trashbottle 100 100 99.78 89.68
+trashbag 95.59 89 92.24 73.45
+trashsnackwrapper 100 100 100 86.2
+trashcan 100 93 98.56 74.78
+trashcup 100 100 100 75.17
+trashcontainer 100 96 99.46 81.42
+trashunknowninstance 93.61 88 89.89 63.98
+trashbranch 92.31 88 95.18 78.77
+trashwreckage 85.71 84 90.88 68.22
+trashtarp 100 72 83.47 71.37
+trashrope 81.82 81 76.53 43.86
+trashnet 83.33 72 86.47 63.38
+all 93.11 81 91.84 69.92
+Source:BasedondatafromHongetal.(2020).
+compressed comparatively for easier categories, when panels (C) ratherthanaroundminimummodelsizealone.Bycombiningunder-
+showabroadspreadacrossmodels,whichindicatesthatmAP@50:95 waterfrequency-awarefeaturereweighting,multi-scalefrequency-aware
+localizationremainsthemainsourceofdivergence.Panel(C)shows attention, and query adaptive reweighting, the model strengthens
+that under the stricter mAP@50:95 metric, the performance gaps degraded visual cues, improves feature discrimination, and adjusts
+among different models become more pronounced. The proposed query responses for more stable classification and localization. The
+methodachievesthehighestvalueinmanycategories,buttheclass- experimentalresultssupporttheeffectivenessofthiscombineddesign
+wisedifferencesalsoshowthatcategoryfrequency,test-setsize,object and indicate that the added modules contribute complementary im-
+morphology, and background confusion all affect the final metric provementsratherthansimplyincreasingmodelcapacity.
+values.ThecolorschemeinFigure10followsthesameorderedlogic: Fromanapplicationperspective,themainvalueofthemethodis
+themodelappearingmostoftenatthebottomofthebarrankingis its balance between detection quality and computational cost.
+shown with the darkest tone, whereas the model appearing most Underwater monitoring, deep-sea inspection, and robot-assisted
+oftenatthetopisshownwiththelightesttone.Whenseveralmodels surveys often rely on limited image acquisition opportunities, so a
+share the same value, the corresponding color interval is divided missedorunreliablesingle-framepredictioncanbemorecostlythan
+evenlysothattiedmodelsremainvisuallyseparable. amoderateincreaseincomputation.Inthiscontext,ImprovedRF-
+DETRisnotintendedtoreplaceextremelylightweightdetectorsin
+scenarioswheremaximumframerateordeploymentonverysmall
+devicesistheonlypriority.Instead,itprovidesastrongeroptionfor
+6 Discussion
+settings where single-image reliability, reduced false alarms, and
+accurate localization are more important. The results also show
+Thisstudyfocusesonreliableunderwaterplasticdebrisdetectionin that difficult cases remain: thin, deformable, partly occluded, or
+sceneswhereimagedegradation,weaktexture,clutteredbackgrounds, background-liketargetsarestillhardertolocalizetightly,andsome
+andirregulartargetshapesmakelocalappearancecuesunstable.The categorieswithveryhighscoreshavesmalltestsubsets,meaningthat
+proposed Improved RF-DETR is designed around this requirement theirapparentperformanceshouldbeinterpretedcautiously.
+FrontiersinMarineScience 17 frontiersin.org
+
+--- PAGE 18 ---
+Lietal. 10.3389/fmars.2026.1885615
+FIGURE10
+Category-wisecomparisonofsixdetectorsontheTrashCandataset.(A–D)comparePrecision,mAP@50,mAP@50:95,andRecall,respectively,for
+YOLO26n,RT-DETR,YOLOv11n,YOLOv8n,YOLO26s,andRF-DETR.Thecolorsfollowanordereddark-to-lightscheme:themodelappearingmost
+oftenatthebottomofthebarorderingisshownwiththedarkestshade,whereasthemodelappearingmostoftenatthetopisshownwiththe
+lightestshade.Ifmultiplemodelssharethesamevalue,thecorrespondingcolorintervalisdividedevenlysothattiedcasesremaindistinguishable.
+(C,D)comparemAP@50:95andRecall,respectively,usingthesamedetectororderingandcolorschemeas(A,B). Source:Basedondatafrom
+Hongetal.(2020).
+Several limitations should therefore be noted. First, the evalu- methodcanbefullyestablished.Second,thepresentstudymainly
+ation is still based on a limited number of underwater debris evaluates static images, while practical underwater systems often
+datasets, and the DeepTrash experiment involves transfer fine- collectsequentialobservations.Temporalconsistency,multi-frame
+tuning rather than zero-shot generalization. More diverse under- fusion, and video-based uncertainty reduction may help reduce
+water sites, imaging devices, turbidity levels, lighting conditions, misseddetectionsandduplicatepredictions.Third,thecomparison
+and debris distributions are needed before the robustness of the setcontainsmanylightweightorsmall-capacitydetectorsandonly
+FrontiersinMarineScience 18 frontiersin.org
+
+--- PAGE 19 ---
+Lietal. 10.3389/fmars.2026.1885615
+a limited number of medium- or high-capacity baselines, so the Funding
+currentresultsdonotfullyanswerhowthemethodcompareswitha
+broaderrangeofstrongernon-lightweightmodels. Theauthor(s)declaredthatfinancialsupportwasnotreceived
+Future research will address these limitations in several direc-
+forthisworkand/oritspublication.
+tions.Moremedium-sizedandlargenonlightweightmodelswillbe
+addedtothebenchmark,includinglargerYOLOvariants,stronger
+DETR-familydetectors,two-stagedetectors,andotherhigh-capac-
+ity architectures, so that the proposed method can be evaluated Conflict of interest
+againstmodelswithcomparableorgreaterrepresentationalcapac-
+ity. In addition, future work will expand cross-domain testing to
+The author(s) declared that this work was conducted in the
+more underwater environments, investigate stronger adaptation
+absenceofanycommercialorfinancialrelationshipsthatcouldbe
+strategies, incorporate temporal information from underwater
+construedasapotentialconflictofinterest.
+video, and improve boundary-aware localization for thin or de-
+formabledebris.Largerandmorebalancedcategory-leveltestsets
+will also be important for determining whether high scores on
+small-samplecategoriesremainstableunderbroaderevaluation.
+Generative AI statement
+Theauthor(s)declared thatgenerativeAIwasnotusedinthe
+creationofthismanuscript.
+Data availability statement
+Anyalternativetext(alttext)providedalongsidefiguresinthis
+articlehasbeengeneratedbyFrontierswiththesupportofartificial
+Theoriginalcontributionspresentedinthestudyareincluded
+intelligence and reasonable efforts have been made to ensure
+in the article/supplementary material. Further inquiries can be
+accuracy, including review by the authors wherever possible. If
+directedtothecorrespondingauthor.
+youidentifyanyissues,pleasecontactus.
+Author contributions Publisher’s note
+YL: Validation, Visualization, Writing – original draft, Allclaimsexpressedinthisarticlearesolelythoseoftheauthors
+Writing – review & editing. ML: Resources, Supervision, anddonotnecessarilyrepresentthoseoftheiraffiliatedorganizations,
+Writing – review & editing. HPY: Data curation, Investigation, orthoseofthepublisher,theeditorsandthereviewers.Anyproduct
+Software, Writing – review & editing. HYY: Conceptualization, thatmaybeevaluatedinthisarticle,orclaimthatmaybemadebyits
+Formalanalysis,Methodology,Writing–review&editing. manufacturer,isnotguaranteedorendorsedbythepublisher.
+References
+Barnard,K.B.,Daniels,J.,Roberts,P.L.D.,Orenstein,E.C.,Masmitja,I.,Takahashi,J., Guo, L., Liu, X., Ye, D., He, X., Xia, J., and Song, W. (2025). Underwater object
+etal.(2024).DeepSTARia:enablingautonomous,targetedobservationsofoceanlifein detectionalgorithmintegratingimageenhancementanddeformableconvolution.Ecol.
+thedeepsea.Front.Mar.Sci.11,1357879.doi:10.3389/fmars.2024.1357879 Inf.89,103185.doi:10.1016/j.ecoinf.2025.103185
+Chen,G.,Mao,Z.,Wang,K.,andShen,J.(2023).HTDet:Ahybridtransformer-based Hong,J.,Fulton,M.,andSattar,J.(2020).TrashCan:Asemantically-segmenteddataset
+approachforunderwatersmallobjectdetection.RemoteSens.15,1076.doi:10.3390/ towardsvisualdetectionofmarinedebris.arXiv.doi:10.48550/arXiv.2007.08097
+rs15041076
+Jian,M.,Yang,N.,Tao,C.,Zhi,H.,andLuo,H.(2024).Underwaterobjectdetectionand
+Corrigan,B.C.,Tay,Z.Y.,andKonovessis,D.(2023).Real-timeinstancesegmentation datasets:Asurvey.IntelligentMar.Technol.Syst.2,9.doi:10.1007/s44295-024-00023-6
+for detection of underwater litter as a plastic source. J. Mar. Sci. Eng. 11, 1532.
+Lakshmanan,B.,Selvakumar,B.,Nivetika,R.,andKarpagalakshmi,R.(2025).MarineDetNet:
+doi:10.3390/jmse11081532
+Enhancingunderwaterimagequalityforimprovedmarineobjectdetection.IranianJ.Sci.
+Cui,J.,Zhou,S.,Xu,G.,Liu,X.,andGao,X.(2025).Marinedebrisdetectioninrealtime:A TechnologyTrans.ElectricalEng.49,1939–1957.doi:10.1007/s40998-025-00834-1
+lightweightUTNetmodel.J.Mar.Sci.Eng.13,1560.doi:10.3390/jmse13081560
+Li,S.,andPeng,X.(2025).DyAqua-YOLO:Ahigh-precisionreal-timeunderwater
+Deluxni,N.,andSudhakaran,P.(2025).UnderwaterdebrisdetectionusingYOLOv12 objectdetectionmodelbasedondynamicadaptivearchitecture.Front.Mar.Sci.12,
+withenhancedfeatureextractionusingR-ELANandFlashAttentionnetwork.Results 1678417.doi:10.3389/fmars.2025.1678417
+Eng.28,107282.doi:10.1016/j.rineng.2025.107282
+Li,T.,Gang,Y.,Li,S.,andShang,Y.(2025a).Asmallunderwaterobjectdetection
+Er,M.J.,Chen,J.,Zhang,Y.,andGao,W.(2023).Researchchallenges,recentadvances, modelwithenhancedfeatureextractionandfusion.Sci.Rep.15,2396.doi:10.1038/
+andpopulardatasetsindeeplearning-basedunderwatermarineobjectdetection:A s41598-025-85961-9
+review.Sensors23,1990.doi:10.3390/s23041990
+Li,X.,Wang,Y.,Zhao,Y.,andChen,G.(2024).UW-DETR:Featurefusionenhanced
+Feng,J.,andJin,T.(2024).CEH-YOLO:AcompositeenhancedYOLO-basedmodel RT-DETRforimprovingunderwaterobjectdetection.IEEEAccess12,191967–191979.
+forunderwaterobjectdetection.Ecol.Inf.82,102758.doi:10.1016/j.ecoinf.2024.102758 doi:10.1109/ACCESS.2024.3515960
+Gao,Z.,Shi,Y.,andLi,S.(2024).Self-attentionandlong-rangerelationshipcapture Li,X.,Zhao,Y.,Su,H.,Wang,Y.,andChen,G.(2025b).Efficientunderwaterobject
+network for underwater object detection. J. King Saud Univ. Comput. Inf. Sci. 36, detectionbasedonfeatureenhancementandattentiondetectionhead.Sci.Rep.15,
+101971.doi:10.1016/j.jksuci.2024.101971 5973.doi:10.1038/s41598-025-89421-2
+FrontiersinMarineScience 19 frontiersin.org
+
+--- PAGE 20 ---
+Lietal. 10.3389/fmars.2026.1885615
+Li,Z.,Kovachki,N.B.,Azizzadenesheli,K.,Liu,B.,Bhattacharya,K.,Stuart,A.,etal Rao,Y.,Zhao,W.,Zhu,Z.,Lu,J.,andZhou,J.(2021).“Globalfilternetworksforimage
+(2021). “Fourier neural operator for parametric partial differential equations,” in classification,”inAdvancesinNeuralInformationProcessingSystems,Vol.34(Red
+ProceedingsoftheNinthInternationalConferenceonLearningRepresentations(ICLR Hook,NY:CurranAssociates,Inc.),980–993.
+2021)(Virtual:OpenReview.net).
+Robinson,I.,Robicheaux,P.,Popov,M.,Ramanan,D.,andPeri,N.(2026).“RF-DETR:
+Lin,C.,Zhang,Y.,andChen,G.(2026).Lightweightunderwaterdebrisdetectionmodelbased Neuralarchitecturesearchforreal-timedetectiontransformers,”inProceedingsofthe
+onimprovedRT-DETR.Mar.pollut.Bull.222,118537.doi:10.1016/j.marpolbul.2025.118537 FourteenthInternationalConferenceonLearningRepresentations(ICLR2026)(Riode
+Janeiro:OpenReview.net).
+Liu, J., Chen, H., Li, Z., and Gu, H. (2024). Multi-scale frequency-spatial domain
+attentionfusionnetworkforbuildingextractioninremotesensingimages.Electronics Rohan, A., Tolie, H. F., Hasan, M. J., and Kannan, S. (2025). Full autonomy in
+13,4642.doi:10.3390/electronics13234642 underwaterroboticssystems:Arealisticprospect?Eng.Appl.Artif.Intell.162,112638.
+doi:10.1016/j.engappai.2025.112638
+Liu,M.,Wu,Y.,Li,R.,andLin,C.(2025).LFN-YOLO:Precisionunderwatersmall
+object detection via a lightweight reparameterized approach. Front. Mar. Sci. 11, Tata,G.,Royer,S.-J.,Poirion,O.,andLowe,J.(2021).Aroboticapproachtowards
+1513740.doi:10.3389/fmars.2024.1513740 quantifyingepipelagicboundplasticusingdeepvisualmodels.arXiv.doi:10.48550/
+Liu,S.,Li,F.,Zhang,H.,Yang,X.,Qi,X.,Su,H.,etal(2022).“DAB-DETR:Dynamic arXiv.2105.01882
+anchorboxesarebetterqueriesforDETR,”inProceedingsoftheTenthInternational Wang,W.,Yu,Z., andHuang,M.(2025).Refiningfeatures forunderwaterobject
+ConferenceonLearningRepresentations(ICLR2022)(Virtual:OpenReview.net). detection at the frequency level. Front. Mar. Sci. 12, 1544839. doi: 10.3389/
+fmars.2025.1544839
+Liu,T.,Wang,Q.,Peng,Z.,Jiang,G.,andChen,F.(2026).Enhancementofunderwater
+imagewithmulti-distortionforobjectdetection.CircuitsSyst.SignalProcess.45,1018–1047. Wang,Y.,Zhang,X.,Yang,T.,andSun,J.(2022).“AnchorDETR:Querydesignfor
+doi:10.1007/s00034-025-03220-8 transformer-baseddetector,”inProceedingsoftheThirty-SixthAAAIConferenceon
+ArtificialIntelligence,Vol.36(PaloAlto,CA:AAAIPress),2567–2575.doi:10.1609/
+Madricardo,F.,Ghezzo,M.,Nesto,N.,McKiver,W.J.,Faussone,G.C.,Fiorin,R.,etal.
+aaai.v36i3.20158
+(2020).Howtodealwithseafloormarinelitter:Anoverviewofthestate-of-the-artand
+futureperspectives.Front.Mar.Sci.7,505134.doi:10.3389/fmars.2020.505134 Xie,H.,Xin,G.,Kang,S.,andXie,Q.(2025).“Efficient-Deformable-DETR:Enhancing
+underwater small target detection in complex environments,” in E3S Web of
+Maximenko,N.,Corradi,P.,Law,K.L.,VanSebille,E.,Garaba,S.P.,Lampitt,R.S., Conferences, Vol. 603 (Les Ulis: EDP Sciences), 04014. doi: 10.1051/e3sconf/
+etal.(2019).Towardtheintegratedmarinedebrisobservingsystem.Front.Mar.Sci.6,
+202560304014
+447.doi:10.3389/fmars.2019.00447
+Yan,S.,Yang,B.,Chen,A.,Zhao,X.,andZhang,S.(2025).Multi-scaleconvolutional
+Meng,D.,Chen,X.,Fan,Z.,Zeng,G.,Li,H.,Yuan,Y.,etal(2021).“ConditionalDETRfor
+attentionfrequency-enhancedtransformernetworkformedicalimagesegmentation.
+fasttrainingconvergence,”inProceedingsoftheIEEE/CVFInternationalConferenceon
+Inf.Fusion119,103019.doi:10.1016/j.inffus.2025.103019
+Computer Vision (ICCV 2021) (Piscataway, NJ: IEEE), 3651–3660. doi: 10.1109/
+ICCV48922.2021.00363 Ying,S.,Song,X.,andWang,H.(2025).High-frequency-basedmulti-spectralattention
+fordomaingeneralization.Artif.Intell.Rev.58,245.doi:10.1007/s10462-025-11217-7
+Prakash,N.,andZielinski,O.(2025).AI-enhancedreal-timemonitoringofmarine
+pollution:part1-astate-of-the-artandscopingreview.Front.Mar.Sci.12,1486615. Yuanwei,J.,Yijiang,D.,Xuemei,W.,andKhairuddin,A.S.M.(2026).Animproved
+doi:10.3389/fmars.2025.1486615 YOLOv11networkformarinedebrisdetectioninunderwaterenvironment.Sci.Rep.
+16,7074.doi:10.1038/s41598-026-38305-0
+Qin,Z.,Zhang,P.,Wu,F.,andLi,X.(2021).“FcaNet:Frequencychannelattention
+networks,” in Proceedings of the IEEE/CVF International Conference on Computer Zhang,D.,Zhang,J.,Wei,T.,He,Z.,andLin,Z.(2025).Underwatersmallobject
+Vision(ICCV2021)(Piscataway,NJ:IEEE),783–792.doi:10.1109/ICCV48922.2021. detectionviaautomaticencodingpyramidwithneighborhoodinformation.J.Ocean
+00082 Eng.Mar.Energy11,841–854.doi:10.1007/s40722-025-00405-w
+FrontiersinMarineScience 20 frontiersin.org
