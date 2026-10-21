@@ -1,427 +1,169 @@
-"""RF-DETR Training Module
-Huấn luyện mô hình RF-DETR 50 epochs với cơ chế bảo vệ checkpoint toàn diện khi hết giờ (Timeout / SIGTERM).
-Tự động đồng bộ và trích xuất toàn diện 6+ chỉ số loss vào file rfdetr_epoch_logs.csv chuẩn hóa.
-"""
-import os
-import sys
-import glob
-import signal
-import shutil
-import time
-import yaml
-import pandas as pd
+"""RF-DETR 1.10.1 Lightning training with the actual four-module DQK core."""
+import hashlib
+import importlib.metadata
+import json
 from pathlib import Path
-from typing import Optional, Callable
-from src.common.epoch_logger import EpochLogger
+
+import torch
+from torch import nn
+import yaml
+from pytorch_lightning import Callback, seed_everything
+from rfdetr.config import RFDETRMediumConfig, TrainConfig
+from rfdetr.training.module_model import RFDETRModelModule
+from rfdetr.training.module_data import RFDETRDataModule
+from rfdetr.training.trainer import build_trainer
+from rfdetr.datasets.coco import filter_parent_categories, annotated_category_ids
+from src.rfdetr.lwdetr_dqk import RFDETRDQKEnhanced, DEFAULT_DQK
+from src.common.dqk_checkpoints import export_best
 
 
-import threading
+class DQKCriterion(nn.Module):
+    def __init__(self, base, settings, detection_weights):
+        super().__init__()
+        self.base = base
+        self.weight_dict = dict(base.weight_dict, loss_tv=settings["lambda_tv"],
+                                loss_sparsity=settings["lambda_sparsity"])
+        for key in self.weight_dict:
+            if key.startswith("loss_bbox"):
+                self.weight_dict[key] = float(detection_weights["loss_bbox"])
+            elif key.startswith("loss_giou"):
+                self.weight_dict[key] = float(detection_weights["loss_giou"])
+
+    def forward(self, outputs, targets, **kwargs):
+        losses = self.base(outputs, targets, **kwargs)
+        return dict(losses, loss_tv=outputs["loss_tv"], loss_sparsity=outputs["loss_sparsity"])
 
 
-def monitor_training_metrics(output_dir, interval=30):
-    metrics_path = Path(output_dir) / "metrics.csv"
-    last_signature = None
-
-    while True:
-        try:
-            if metrics_path.exists():
-                signature = (
-                    metrics_path.stat().st_mtime,
-                    metrics_path.stat().st_size,
-                )
-
-                if signature != last_signature:
-                    df = pd.read_csv(metrics_path)
-
-                    if not df.empty:
-                        latest = df.iloc[-1]
-
-                        epoch = latest.get("epoch", "N/A")
-                        step = latest.get("step", "N/A")
-
-                        print(
-                            f"[TRAIN PROGRESS] "
-                            f"Epoch={epoch} | "
-                            f"Step={step} | "
-                            f"Rows={len(df)} | "
-                            f"Updated={time.strftime('%H:%M:%S')}",
-                            flush=True,
-                        )
-
-                        metric_names = [
-                            "train/loss",
-                            "train/loss_ce",
-                            "train/loss_bbox",
-                            "train/loss_giou",
-                            "val/loss",
-                            "val/mAP_50",
-                            "val/mAP_50_95",
-                            "train/lr",
-                        ]
-
-                        for key in metric_names:
-                            if key in df.columns and pd.notna(latest[key]):
-                                print(
-                                    f"  {key}: {latest[key]}",
-                                    flush=True,
-                                )
-
-                    last_signature = signature
-
-        except Exception as exc:
-            print(
-                f"[METRICS MONITOR] {exc}",
-                flush=True,
-            )
-
-        time.sleep(interval)
+class DQKModelModule(RFDETRModelModule):
+    def __init__(self, model_config, train_config, settings, detection_weights):
+        super().__init__(model_config, train_config)
+        self.model = RFDETRDQKEnhanced.from_base(self.model, model_config, settings)
+        self.criterion = DQKCriterion(self.criterion, settings, detection_weights)
+        self.strict_loading = True
 
 
+class CommitEpoch(Callback):
+    def __init__(self, commit_fn):
+        self.commit_fn = commit_fn
 
-def sync_and_export_rfdetr_logs(output_dir: str, log_dir: str, epoch_logger: EpochLogger):
-    """Trích xuất tự động và đầy đủ các chỉ số từ metrics.csv và TensorBoard event files
-    để ghi vào rfdetr_epoch_logs.csv theo đúng chuẩn yêu cầu đề tài."""
-    extracted_rows = []
-    
-    # 1. Đọc từ TensorBoard Event Files (chính xác và đầy đủ nhất cho từng step/epoch)
+    def on_train_epoch_end(self, trainer, pl_module):
+        if self.commit_fn and trainer.is_global_zero:
+            self.commit_fn()
+
+    def on_fit_end(self, trainer, pl_module):
+        if self.commit_fn and trainer.is_global_zero:
+            self.commit_fn()
+
+
+class AuditTraining(Callback):
+    def __init__(self, output):
+        self.output = Path(output)
+        self.report = {"optimizer_steps": 0}
+
+    def on_fit_start(self, trainer, pl_module):
+        parameters = [p for opt in trainer.optimizers for group in opt.param_groups for p in group["params"]]
+        actual = {id(p) for p in parameters}
+        expected = {id(p) for p in pl_module.model.parameters() if p.requires_grad}
+        if actual != expected or len(parameters) != len(actual):
+            raise RuntimeError("Optimizer parameter coverage missing/duplicated")
+        self.report.update(optimizer_covers_all_trainable=True, no_duplicate_parameters=True)
+
+    def on_before_optimizer_step(self, trainer, pl_module, optimizer):
+        relevant = [(n, p) for n, p in pl_module.model.named_parameters()
+                    if any(token in n for token in ("darm.", "dafd_modules.", "uffr_modules.", "mfa_modules."))]
+        missing = [n for n, p in relevant if p.grad is None]
+        if missing or any(not torch.isfinite(p.grad).all() for _, p in relevant):
+            raise RuntimeError(f"DQK missing/nonfinite gradients: {missing}")
+        self.report.update(optimizer_steps=self.report["optimizer_steps"]+1,
+                           dqk_parameters_with_grad=len(relevant), dqk_gradients_finite=True)
+
+    def on_train_epoch_end(self, trainer, pl_module):
+        if trainer.is_global_zero:
+            (self.output/"training_audit.json").write_text(json.dumps(self.report, indent=2), encoding="utf-8")
+
+
+def dataset_schema(dataset_dir):
+    names, hashes = None, {}
+    for split in ("train", "valid", "test"):
+        path = Path(dataset_dir)/split/"_annotations.coco.json"
+        raw = path.read_bytes()
+        annotations = json.loads(raw)
+        kept = filter_parent_categories(annotations["categories"], annotated_category_ids(annotations))
+        current = [category["name"] for category in kept]
+        if names is None:
+            names = current
+        if current != names or len(current) != 32 or len(set(current)) != 32:
+            raise ValueError("Train/valid/test must share the same 32-class schema")
+        hashes[split] = hashlib.sha256(raw).hexdigest()
+    return names, hashes
+
+
+def train_rfdetr_dqk(dataset_dir, config_path, output_dir, commit_fn=None, *, smoke=False,
+                     resume=None, epochs=None):
+    if importlib.metadata.version("rfdetr") != "1.10.1":
+        raise RuntimeError("DQK v1 is pinned to rfdetr==1.10.1")
+    output = Path(output_dir)
+    output.mkdir(parents=True, exist_ok=True)
+    # Reusing a populated output is only allowed with an explicit full-state resume.
+    if any(output.iterdir()) and not resume:
+        raise FileExistsError(f"Output already populated: {output}")
+    config = yaml.safe_load(Path(config_path).read_text(encoding="utf-8"))
+    training = config["training"]
+    names, hashes = dataset_schema(dataset_dir)
+    settings = dict(DEFAULT_DQK, **config.get("dqk", {}))
+    if config["model"]["variant"] != "RFDETRDQKEnhanced" or int(training["device"]) != 0:
+        raise ValueError("DQK pipeline expects RFDETRDQKEnhanced on a single GPU (device 0)")
+    seed_everything(int(training["seed"]), workers=True)
+    mc = RFDETRMediumConfig(num_classes=len(names), resolution=int(training["imgsz"]),
+        model_name="RFDETRDQKEnhanced", compile=False,
+        pretrain_weights=None if resume or not config["model"].get("pretrained", True) else "rf-detr-medium.pth")
+    if mc.pretrain_weights:
+        # Direct Lightning module construction bypasses facade cache preparation.
+        Path(mc.pretrain_weights).parent.mkdir(parents=True, exist_ok=True)
+    options = dict(dataset_dir=str(dataset_dir), output_dir=str(output),
+        epochs=1 if smoke else int(epochs or training["epochs"]),
+        batch_size=1 if smoke else int(training["batch_size"]),
+        grad_accum_steps=1 if smoke else int(training["grad_accum_steps"]),
+        num_workers=0 if smoke else int(training["workers"]), lr=float(training["lr"]),
+        weight_decay=float(training["weight_decay"]), seed=int(training["seed"]),
+        amp_dtype=training["amp_dtype"], early_stopping=not smoke,
+        early_stopping_patience=int(training["patience"]), early_stopping_use_ema=True,
+        eval_interval=1 if smoke else int(training["eval_interval"]), eval_max_dets=100, use_ema=True, eval_base_model=False,
+        tensorboard=True, run_test=False, class_names=names, compact_train_metrics=False,
+        multi_scale=bool(training.get("multi_scale", False)),
+        expanded_scales=bool(training.get("multi_scale", False)), compute_val_loss=True,
+        cls_loss_coef=float(config["loss_weights"]["loss_cls"]),
+        notes={"dqk": settings, "annotation_sha256": hashes,
+               "detection_loss_weights": config["loss_weights"],
+               "purpose": "smoke_not_scientific_result" if smoke else "DQK_enhanced_training"})
+    tc = TrainConfig(**options)
+    module = DQKModelModule(mc, tc, settings, config["loss_weights"])
+    datamodule = RFDETRDataModule(mc, tc)
+    trainer_options = {"accelerator": "gpu", "devices": 1}
+    if smoke:
+        trainer_options.update(limit_train_batches=3, limit_val_batches=1, num_sanity_val_steps=0)
+    trainer = build_trainer(tc, mc, **trainer_options)
+    trainer.callbacks.append(AuditTraining(output))
+    trainer.callbacks.append(CommitEpoch(commit_fn))
+    effective = {"model_config": mc.model_dump(), "train_config": tc.model_dump(), "dqk": settings,
+                 "class_names": names, "annotation_sha256": hashes}
+    (output/"dqk_effective_config.json").write_text(json.dumps(effective, indent=2, default=str), encoding="utf-8")
     try:
-        from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
-        event_files = sorted(list(set(glob.glob(os.path.join(output_dir, "events*")) + glob.glob(os.path.join(output_dir, "**", "events*"), recursive=True))))
-        if event_files:
-            all_events_by_step = {}
-            step_durations = {}
-
-            for ef in event_files:
-                try:
-                    ea = EventAccumulator(ef)
-                    ea.Reload()
-                    scalars = ea.Tags().get("scalars", [])
-
-                    # Xác định thời điểm bắt đầu session huấn luyện trong file này
-                    first_time = None
-                    for tag_cand in ["train/lr", "train/loss", "train/loss_ce"]:
-                        if tag_cand in scalars:
-                            ev_list = ea.Scalars(tag_cand)
-                            if ev_list:
-                                first_time = ev_list[0].wall_time
-                                break
-                    if first_time is None and scalars:
-                        first_time = ea.Scalars(scalars[0])[0].wall_time
-
-                    # Thu thập các step có validation metric trong file này để tính duration
-                    file_val_steps = []
-                    if "val/mAP_50_95" in scalars:
-                        for ev in ea.Scalars("val/mAP_50_95"):
-                            file_val_steps.append((ev.step, ev.wall_time))
-                    elif "val/loss" in scalars:
-                        for ev in ea.Scalars("val/loss"):
-                            file_val_steps.append((ev.step, ev.wall_time))
-
-                    file_val_steps.sort(key=lambda x: x[0])
-                    prev_t = first_time
-                    for s, wt in file_val_steps:
-                        if prev_t is not None and wt >= prev_t:
-                            step_durations[s] = round(wt - prev_t, 2)
-                        else:
-                            step_durations[s] = 0.0
-                        prev_t = wt
-
-                    for tag in scalars:
-                        for ev in ea.Scalars(tag):
-                            step = ev.step
-                            if step not in all_events_by_step:
-                                all_events_by_step[step] = {}
-                            all_events_by_step[step][tag] = ev.value
-                except Exception as ee:
-                    print(f"[!] Warning reading event file {ef}: {ee}")
-
-            # Lọc các step có validation metric
-            val_steps = sorted([s for s, d in all_events_by_step.items() if any(k in d for k in ["val/mAP_50_95", "val/loss", "val/mAP_50"])])
-            if val_steps:
-                for ep_idx, step in enumerate(val_steps, start=1):
-                    d = all_events_by_step[step]
-                    
-                    train_loss = float(d.get("train/loss", d.get("val/loss", 0.0)))
-                    cls_loss = float(d.get("train/loss_ce", d.get("val/loss_ce", 0.0)))
-                    box_loss = float(d.get("train/loss_bbox", d.get("val/loss_bbox", 0.0)))
-                    giou_loss = float(d.get("train/loss_giou", d.get("val/loss_giou", 0.0)))
-                    lr = float(d.get("train/lr", d.get("lr", 1e-4)))
-                    val_prec = float(d.get("val/precision", 0.0))
-                    val_rec = float(d.get("val/recall", 0.0))
-                    val_map50 = float(d.get("val/mAP_50", 0.0))
-                    val_map50_95 = float(d.get("val/mAP_50_95", 0.0))
-                    epoch_time = step_durations.get(step, 0.0)
-
-                    extracted_rows.append({
-                        "Epoch": ep_idx,
-                        "Train loss": round(train_loss, 5),
-                        "Class loss": round(cls_loss, 5),
-                        "Box loss": round(box_loss, 5),
-                        "GIoU": round(giou_loss, 5),
-                        "Learning rate": f"{lr:.6e}",
-                        "Val Precision": round(val_prec, 4),
-                        "Val Recall": round(val_rec, 4),
-                        "val_mAP50": round(val_map50, 4),
-                        "val_mAP50_95": round(val_map50_95, 4),
-                        "Epoch Time (s)": epoch_time,
-                    })
-    except Exception as e:
-        print(f"[!] Warning extracting from TensorBoard: {e}")
-
-    # 2. Nếu TensorBoard chưa có, đọc từ metrics.csv
-    if not extracted_rows:
-        metrics_csv = Path(output_dir) / "metrics.csv"
-        if metrics_csv.exists():
-            try:
-                df = pd.read_csv(metrics_csv)
-                # Lọc các dòng có epoch hoặc val metrics
-                if "epoch" in df.columns:
-                    for _, row in df.iterrows():
-                        ep = int(row.get("epoch", len(extracted_rows) + 1))
-                        train_loss = float(row.get("train/loss", row.get("loss", 0.0)))
-                        cls_loss = float(row.get("train/loss_ce", row.get("val/loss_ce", 0.0)))
-                        box_loss = float(row.get("train/loss_bbox", row.get("val/loss_bbox", 0.0)))
-                        giou_loss = float(row.get("train/loss_giou", row.get("val/loss_giou", 0.0)))
-                        lr = float(row.get("train/lr", row.get("lr", 1e-4)))
-                        val_prec = float(row.get("val/precision", row.get("precision", 0.0)))
-                        val_rec = float(row.get("val/recall", row.get("recall", 0.0)))
-                        val_map50 = float(row.get("val/mAP_50", row.get("mAP_50", 0.0)))
-                        val_map50_95 = float(row.get("val/mAP_50_95", row.get("mAP_50_95", 0.0)))
-
-                        extracted_rows.append({
-                            "Epoch": ep,
-                            "Train loss": round(train_loss, 5),
-                            "Class loss": round(cls_loss, 5),
-                            "Box loss": round(box_loss, 5),
-                            "GIoU": round(giou_loss, 5),
-                            "Learning rate": f"{lr:.6e}",
-                            "Val Precision": round(val_prec, 4),
-                            "Val Recall": round(val_rec, 4),
-                            "val_mAP50": round(val_map50, 4),
-                            "val_mAP50_95": round(val_map50_95, 4),
-                            "Epoch Time (s)": 0.0,
-                        })
-            except Exception as me:
-                print(f"[!] Warning reading metrics.csv: {me}")
-
-    # 3. Ghi vào epoch_logger và lưu file rfdetr_epoch_logs.csv
-    if extracted_rows:
-        for r in extracted_rows:
-            epoch_logger.logs_dict[int(r["Epoch"])] = r
-        epoch_logger.save_csv()
-        print(f"[+] [LOG EXPORT] Successfully exported {len(extracted_rows)} epochs to: {epoch_logger.log_file_path}")
-    else:
-        epoch_logger.save_csv()
-
-
-def train_rfdetr_dqk(
-    dataset_dir: Optional[str] = None,
-    data_dir: Optional[str] = None,
-    config_path: str = "configs/rfdetr.yaml",
-    output_dir: str = "/vol/checkpoints/rfdetr",
-    log_dir: str = "/vol/logs/rfdetr",
-    commit_fn: Optional[Callable[[], None]] = None,
-    **kwargs,
-):
-    os.makedirs(output_dir, exist_ok=True)
-    os.makedirs(log_dir, exist_ok=True)
-
-    # 1. Chuẩn hóa dataset_dir từ các alias
-    if not dataset_dir:
-        if data_dir:
-            dataset_dir = data_dir
-        else:
-            candidates = [
-                "/vol/datasets/completed-project-5/yolo",
-                "/vol/datasets/completed-project-5/coco",
-                "/vol/datasets/completed-project-1/yolo",
-                "/vol/datasets/completed-project-1/coco",
-            ]
-            for c in candidates:
-                if os.path.exists(c):
-                    dataset_dir = c
-                    break
-            if not dataset_dir:
-                dataset_dir = "/vol/datasets/completed-project-5/yolo"
-
-    # 2. Tự động kiểm tra tính hợp lệ và fallback thông minh nếu truyền nhầm coco/yolo
-    has_coco = os.path.exists(os.path.join(dataset_dir, "train", "_annotations.coco.json"))
-    has_yolo = os.path.exists(os.path.join(dataset_dir, "data.yaml")) and os.path.exists(os.path.join(dataset_dir, "train", "images"))
-    if not has_coco and not has_yolo:
-        if "coco" in dataset_dir:
-            yolo_alt = dataset_dir.replace("coco", "yolo")
-            if os.path.exists(yolo_alt) and os.path.exists(os.path.join(yolo_alt, "data.yaml")):
-                print(f"[*] [AUTO SWITCH] Chuyển tự động sang thư mục YOLO hợp lệ: {yolo_alt}")
-                dataset_dir = yolo_alt
-        elif "yolo" in dataset_dir:
-            coco_alt = dataset_dir.replace("yolo", "coco")
-            if os.path.exists(coco_alt) and os.path.exists(os.path.join(coco_alt, "train", "_annotations.coco.json")):
-                print(f"[*] [AUTO SWITCH] Chuyển tự động sang thư mục COCO hợp lệ: {coco_alt}")
-                dataset_dir = coco_alt
-
-    # 3. Đảm bảo nếu là COCO thì xóa data.yaml rác để tránh lỗi YOLO test split
-    if os.path.exists(os.path.join(dataset_dir, "train", "_annotations.coco.json")):
-        stray_yaml = os.path.join(dataset_dir, "data.yaml")
-        if os.path.exists(stray_yaml):
-            try:
-                os.remove(stray_yaml)
-                print(f"[+] [TRAIN] Đã loại bỏ file {stray_yaml} để RF-DETR nạp đúng chuẩn COCO JSON.")
-            except Exception as e:
-                print(f"[!] Warning removing stray yaml: {e}")
-
-    # Đọc cấu hình
-    if os.path.exists(config_path):
-        with open(config_path, "r", encoding="utf-8") as f:
-            cfg = yaml.safe_load(f) or {}
-    else:
-        alt_cfg = "/root/configs/rfdetr.yaml"
-        if os.path.exists(alt_cfg):
-            with open(alt_cfg, "r", encoding="utf-8") as f:
-                cfg = yaml.safe_load(f) or {}
-        else:
-            cfg = {}
-
-    model_cfg = cfg.get("model", {})
-    train_cfg = cfg.get("training", {})
-
-    model_variant = model_cfg.get("variant", "RFDETRDQKEnhanced")
-    epochs = train_cfg.get("epochs", 80)
-    patience = train_cfg.get("patience", 10)  # Cấu hình chuẩn patience = 10
-    imgsz = train_cfg.get("imgsz", 640)
-    batch_size = train_cfg.get("batch_size", 16)
-    grad_accum_steps = train_cfg.get("grad_accum_steps", 1)
-    lr = float(train_cfg.get("lr", 0.0001))
-
-    # 3. Kiểm tra checkpoint dở dang để resume nếu trước đó bị hết giờ (Timeout)
-    resume_candidates = [
-        Path(output_dir) / "last.ckpt",
-        Path(output_dir) / "checkpoint.pth",
-        Path(output_dir) / "last.pth",
-    ]
-    ckpt_files = sorted(Path(output_dir).glob("checkpoint_*.ckpt"), key=lambda p: p.stat().st_mtime if p.exists() else 0, reverse=True)
-    for ckpt in ckpt_files:
-        resume_candidates.append(ckpt)
-
-    resume_path = None
-    for cand in resume_candidates:
-        if cand.exists():
-            resume_path = str(cand)
-            break
-
-    if resume_path:
-        print(f"[*] [RESUME SAFE] Tìm thấy checkpoint RF-DETR dở dang tại: {resume_path}. Tự động RESUME từ epoch dở dang...")
-        metrics_file = Path(output_dir) / "metrics.csv"
-        if metrics_file.exists():
-            backup_metrics = Path(output_dir) / "metrics_epoch_backup.csv"
-            shutil.copy(metrics_file, backup_metrics)
-            print(f"[+] [BACKUP AN TOÀN] Đã sao lưu lịch sử metrics sang: {backup_metrics.name}")
-    else:
-        print(f"[*] [NEW RUN] Khởi tạo RF-DETR ({model_variant}) mới cho {epochs} epochs (patience={patience})...")
-
-    log_file_csv = os.path.join(log_dir, "rfdetr_epoch_logs.csv")
-    epoch_logger = EpochLogger(
-        log_file_path=log_file_csv,
-        model_name="RF-DETR-DQK",
-        commit_fn=commit_fn,
-    )
-
-    def sync_rfdetr_checkpoints():
-        """Đồng bộ các checkpoint của RF-DETR sang best.pth và last.pth."""
-        best_candidates = [
-            Path(output_dir) / "checkpoint_best_ema.pth",
-            Path(output_dir) / "checkpoint_best_regular.pth",
-            Path(output_dir) / "checkpoint_best.pth",
-            Path(output_dir) / "best.pth",
-        ]
-        dest_best = Path(output_dir) / "best.pth"
-        dest_last = Path(output_dir) / "last.pth"
-
-        for cand in best_candidates:
-            if cand.exists():
-                if cand != dest_best:
-                    shutil.copy(cand, dest_best)
-                break
-
-        current_last = Path(output_dir) / "checkpoint.pth"
-        if not current_last.exists():
-            current_last = Path(output_dir) / "last.ckpt"
-        if current_last.exists() and current_last != dest_last:
-            shutil.copy(current_last, dest_last)
-
-        # Xuất và đồng bộ bảng log csv
-        sync_and_export_rfdetr_logs(output_dir=output_dir, log_dir=log_dir, epoch_logger=epoch_logger)
-
-        if commit_fn is not None:
-            try:
-                commit_fn()
-            except Exception as e:
-                print(f"[!] Warning commit storage: {e}")
-
-    main_pid = os.getpid()
-
-    # Xử lý Signal khi Modal gửi tín hiệu Timeout (SIGTERM)
-    def handle_rfdetr_termination(signum, frame):
-        if os.getpid() != main_pid:
-            return
-        print(f"\n[!] Nhận tín hiệu dừng (Signal {signum}) do hết thời gian. Đang lưu checkpoint RF-DETR...")
-        sync_rfdetr_checkpoints()
-        if commit_fn is not None:
-            commit_fn()
-        print("[+] Đã lưu toàn bộ tiến độ RF-DETR vào Storage trước khi dừng container.")
-        sys.exit(0)
-
-    try:
-        signal.signal(signal.SIGTERM, handle_rfdetr_termination)
-    except Exception:
-        pass
-
-    from src.rfdetr.lwdetr_dqk import RFDETRDQKEnhanced
-    
-    try:
-        model = RFDETRDQKEnhanced(resolution=imgsz)
-    except Exception as e:
-        print(f"[!] Lỗi khởi tạo model {model_variant}: {e}")
-        from rfdetr import RFDETRMedium
-        model = RFDETRMedium(resolution=imgsz)
-
-    print(f"[*] Bắt đầu huấn luyện RF-DETR trên {dataset_dir} (epochs={epochs}, patience={patience}, batch_size={batch_size}, imgsz={imgsz}, resume={bool(resume_path)})...")
-    
-    train_kwargs = {
-        "dataset_dir": dataset_dir,
-        "epochs": epochs,
-        "early_stopping": True,
-        "early_stopping_patience": patience,
-        "batch_size": batch_size,
-        "grad_accum_steps": grad_accum_steps,
-        "lr": lr,
-        "output_dir": output_dir,
-    }
-    if resume_path:
-        train_kwargs["resume"] = resume_path
-
-    monitor_thread = threading.Thread(
-        target=monitor_training_metrics,
-        args=(output_dir, 30),
-        daemon=True,
-    )
-    monitor_thread.start()
-
-    try:
-        model.train(**train_kwargs)
-    except Exception as exc:
-        import traceback
-        print(f"[!] Lỗi khi huấn luyện RF-DETR: {exc}")
-        traceback.print_exc()
-        raise exc
+        trainer.fit(module, datamodule, ckpt_path=resume)
+        winner = output/"checkpoint_best_total.pth"
+        if not winner.is_file():
+            raise RuntimeError("Trainer did not produce checkpoint_best_total.pth")
+        checkpoint = torch.load(winner, map_location="cpu", weights_only=True)
+        state = checkpoint["model"]
+        for token in ("darm.", "dafd_modules.", "uffr_modules.", "mfa_modules."):
+            if not any(token in key for key in state):
+                raise RuntimeError(f"Best checkpoint lacks {token}")
+        if checkpoint.get("model_name") != "RFDETRDQKEnhanced":
+            raise RuntimeError("Best checkpoint has incorrect architecture metadata")
+        # RF-DETR 1.10.1 strips model_config from best_total; the native facade
+        # normally restores it after fit. We own the custom facade, so export the
+        # complete inference schema ourselves, without changing winner weights.
+        return export_best(output, mc.model_dump(), names, options["notes"])
     finally:
-        sync_rfdetr_checkpoints()
-        if commit_fn is not None:
+        if commit_fn:
             commit_fn()
-
-    dest_best = Path(output_dir) / "best.pth"
-    print(f"[+] RF-DETR hoàn tất! Best Checkpoint: {dest_best}")
-    return str(dest_best)
-
-
-if __name__ == "__main__":
-    train_rfdetr_dqk()

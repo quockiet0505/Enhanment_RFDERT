@@ -1,0 +1,652 @@
+{
+  "source_volume": "food-detection-training",
+  "source_directory": "/datasets/completed-project-5/coco",
+  "scope": "Annotation contents only; image bytes and cloud checkpoint not validated here",
+  "splits": {
+    "train": {
+      "annotation_sha256": "bafae528e05a107cb4372e704ee06683305d7a81009bfb9ce12378c6eaeaa182",
+      "images": 10353,
+      "annotations": 26317,
+      "declared_categories": 33,
+      "annotated_categories": 32,
+      "configured_foreground_categories": 32,
+      "class_order_matches_config": true,
+      "categories": [
+        {
+          "id": 0,
+          "name": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "supercategory": "none",
+          "annotation_count": 0
+        },
+        {
+          "id": 1,
+          "name": "beef",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 2110
+        },
+        {
+          "id": 2,
+          "name": "bellpepper",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 517
+        },
+        {
+          "id": 3,
+          "name": "bittergourd",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 301
+        },
+        {
+          "id": 4,
+          "name": "bottlegourd",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 840
+        },
+        {
+          "id": 5,
+          "name": "broccoli",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 458
+        },
+        {
+          "id": 6,
+          "name": "cabbage",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 466
+        },
+        {
+          "id": 7,
+          "name": "carrot",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 527
+        },
+        {
+          "id": 8,
+          "name": "cauliflower",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 751
+        },
+        {
+          "id": 9,
+          "name": "chayote",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 315
+        },
+        {
+          "id": 10,
+          "name": "chicken",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 341
+        },
+        {
+          "id": 11,
+          "name": "chickenegg",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 878
+        },
+        {
+          "id": 12,
+          "name": "chickenleg",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 3461
+        },
+        {
+          "id": 13,
+          "name": "chickenwin",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 1368
+        },
+        {
+          "id": 14,
+          "name": "corn",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 1206
+        },
+        {
+          "id": 15,
+          "name": "cucumber",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 1532
+        },
+        {
+          "id": 16,
+          "name": "duckegg",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 599
+        },
+        {
+          "id": 17,
+          "name": "eggplant",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 390
+        },
+        {
+          "id": 18,
+          "name": "garlic",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 1229
+        },
+        {
+          "id": 19,
+          "name": "ginger",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 306
+        },
+        {
+          "id": 20,
+          "name": "jicama",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 772
+        },
+        {
+          "id": 21,
+          "name": "okra",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 486
+        },
+        {
+          "id": 22,
+          "name": "onion",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 841
+        },
+        {
+          "id": 23,
+          "name": "pork",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 640
+        },
+        {
+          "id": 24,
+          "name": "potato",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 618
+        },
+        {
+          "id": 25,
+          "name": "pumpkin",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 856
+        },
+        {
+          "id": 26,
+          "name": "radish",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 1374
+        },
+        {
+          "id": 27,
+          "name": "scallion",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 402
+        },
+        {
+          "id": 28,
+          "name": "shrimp",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 241
+        },
+        {
+          "id": 29,
+          "name": "spongegourd",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 913
+        },
+        {
+          "id": 30,
+          "name": "sweetpotato",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 661
+        },
+        {
+          "id": 31,
+          "name": "tofu",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 318
+        },
+        {
+          "id": 32,
+          "name": "tomato",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 600
+        }
+      ],
+      "duplicate_image_ids": 0,
+      "duplicate_annotation_ids": 0,
+      "duplicate_filenames": 0,
+      "annotation_errors": {}
+    },
+    "valid": {
+      "annotation_sha256": "6f2c49870de65e67125929f71d142dae95223192f4afef0683ebbadcf9baad1a",
+      "images": 2976,
+      "annotations": 7782,
+      "declared_categories": 33,
+      "annotated_categories": 32,
+      "configured_foreground_categories": 32,
+      "class_order_matches_config": true,
+      "categories": [
+        {
+          "id": 0,
+          "name": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "supercategory": "none",
+          "annotation_count": 0
+        },
+        {
+          "id": 1,
+          "name": "beef",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 682
+        },
+        {
+          "id": 2,
+          "name": "bellpepper",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 133
+        },
+        {
+          "id": 3,
+          "name": "bittergourd",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 114
+        },
+        {
+          "id": 4,
+          "name": "bottlegourd",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 256
+        },
+        {
+          "id": 5,
+          "name": "broccoli",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 129
+        },
+        {
+          "id": 6,
+          "name": "cabbage",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 118
+        },
+        {
+          "id": 7,
+          "name": "carrot",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 152
+        },
+        {
+          "id": 8,
+          "name": "cauliflower",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 234
+        },
+        {
+          "id": 9,
+          "name": "chayote",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 92
+        },
+        {
+          "id": 10,
+          "name": "chicken",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 84
+        },
+        {
+          "id": 11,
+          "name": "chickenegg",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 412
+        },
+        {
+          "id": 12,
+          "name": "chickenleg",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 1006
+        },
+        {
+          "id": 13,
+          "name": "chickenwin",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 341
+        },
+        {
+          "id": 14,
+          "name": "corn",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 299
+        },
+        {
+          "id": 15,
+          "name": "cucumber",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 392
+        },
+        {
+          "id": 16,
+          "name": "duckegg",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 221
+        },
+        {
+          "id": 17,
+          "name": "eggplant",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 82
+        },
+        {
+          "id": 18,
+          "name": "garlic",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 367
+        },
+        {
+          "id": 19,
+          "name": "ginger",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 100
+        },
+        {
+          "id": 20,
+          "name": "jicama",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 235
+        },
+        {
+          "id": 21,
+          "name": "okra",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 165
+        },
+        {
+          "id": 22,
+          "name": "onion",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 299
+        },
+        {
+          "id": 23,
+          "name": "pork",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 157
+        },
+        {
+          "id": 24,
+          "name": "potato",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 185
+        },
+        {
+          "id": 25,
+          "name": "pumpkin",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 281
+        },
+        {
+          "id": 26,
+          "name": "radish",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 375
+        },
+        {
+          "id": 27,
+          "name": "scallion",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 122
+        },
+        {
+          "id": 28,
+          "name": "shrimp",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 95
+        },
+        {
+          "id": 29,
+          "name": "spongegourd",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 227
+        },
+        {
+          "id": 30,
+          "name": "sweetpotato",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 185
+        },
+        {
+          "id": 31,
+          "name": "tofu",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 103
+        },
+        {
+          "id": 32,
+          "name": "tomato",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 139
+        }
+      ],
+      "duplicate_image_ids": 0,
+      "duplicate_annotation_ids": 0,
+      "duplicate_filenames": 0,
+      "annotation_errors": {}
+    },
+    "test": {
+      "annotation_sha256": "d7f69d3b3933acd390fae8b65cb577e9e07d7b9b96031ab39ab74cdbc9901376",
+      "images": 1481,
+      "annotations": 3911,
+      "declared_categories": 33,
+      "annotated_categories": 32,
+      "configured_foreground_categories": 32,
+      "class_order_matches_config": true,
+      "categories": [
+        {
+          "id": 0,
+          "name": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "supercategory": "none",
+          "annotation_count": 0
+        },
+        {
+          "id": 1,
+          "name": "beef",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 331
+        },
+        {
+          "id": 2,
+          "name": "bellpepper",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 83
+        },
+        {
+          "id": 3,
+          "name": "bittergourd",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 50
+        },
+        {
+          "id": 4,
+          "name": "bottlegourd",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 140
+        },
+        {
+          "id": 5,
+          "name": "broccoli",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 68
+        },
+        {
+          "id": 6,
+          "name": "cabbage",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 79
+        },
+        {
+          "id": 7,
+          "name": "carrot",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 74
+        },
+        {
+          "id": 8,
+          "name": "cauliflower",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 109
+        },
+        {
+          "id": 9,
+          "name": "chayote",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 57
+        },
+        {
+          "id": 10,
+          "name": "chicken",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 50
+        },
+        {
+          "id": 11,
+          "name": "chickenegg",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 223
+        },
+        {
+          "id": 12,
+          "name": "chickenleg",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 531
+        },
+        {
+          "id": 13,
+          "name": "chickenwin",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 151
+        },
+        {
+          "id": 14,
+          "name": "corn",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 134
+        },
+        {
+          "id": 15,
+          "name": "cucumber",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 197
+        },
+        {
+          "id": 16,
+          "name": "duckegg",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 99
+        },
+        {
+          "id": 17,
+          "name": "eggplant",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 45
+        },
+        {
+          "id": 18,
+          "name": "garlic",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 179
+        },
+        {
+          "id": 19,
+          "name": "ginger",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 64
+        },
+        {
+          "id": 20,
+          "name": "jicama",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 109
+        },
+        {
+          "id": 21,
+          "name": "okra",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 92
+        },
+        {
+          "id": 22,
+          "name": "onion",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 126
+        },
+        {
+          "id": 23,
+          "name": "pork",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 79
+        },
+        {
+          "id": 24,
+          "name": "potato",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 56
+        },
+        {
+          "id": 25,
+          "name": "pumpkin",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 104
+        },
+        {
+          "id": 26,
+          "name": "radish",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 159
+        },
+        {
+          "id": 27,
+          "name": "scallion",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 55
+        },
+        {
+          "id": 28,
+          "name": "shrimp",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 48
+        },
+        {
+          "id": 29,
+          "name": "spongegourd",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 143
+        },
+        {
+          "id": 30,
+          "name": "sweetpotato",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 100
+        },
+        {
+          "id": 31,
+          "name": "tofu",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 44
+        },
+        {
+          "id": 32,
+          "name": "tomato",
+          "supercategory": "19-8-BoSungAnhChoCacLopBiTh-v3zo",
+          "annotation_count": 132
+        }
+      ],
+      "duplicate_image_ids": 0,
+      "duplicate_annotation_ids": 0,
+      "duplicate_filenames": 0,
+      "annotation_errors": {}
+    }
+  },
+  "exact_filename_overlap_between_splits": {
+    "train/valid": 0,
+    "train/test": 0,
+    "valid/test": 0
+  },
+  "test_annotation_hash_matches_saved_result": true
+}

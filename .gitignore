@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.review_deps/
+.venv/
+venv/
+References/vendor_sources/
+*.whl
+*.pth
+*.pt
+*.ckpt
+.env
+.env.*
+!.env.example

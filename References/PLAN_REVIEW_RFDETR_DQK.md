@@ -1,6 +1,12 @@
 # Kế hoạch kiểm tra và sửa RF-DETR cải tiến của Dương Quốc Kiệt
 
+**Trạng thái triển khai mới nhất:** đã có core/train enhanced và pipeline versioned train -> test -> tải báo cáo, được kiểm chứng ngắn trên A100; xem `HUONG_DAN_TRAIN_TEST_DQK_V1.md`. Các lỗi trong bản review dưới đây mô tả code trước khi sửa. Chưa chạy full train/test enhanced.
+
+**Cập nhật hoàn tất test legacy:** đã sửa đường test và chạy thành công trên 1.481 ảnh: mAP50=98.74%, mAP50:95=88.00%; COCO metric được đối chiếu với script chung trên cùng prediction và trùng khớp. Chi tiết tại `RESULT_LEGACY_TEST_VERIFIED_20261021.md`. Phần phân tích bên dưới ghi lại các lỗi và trạng thái tại thời điểm rà soát; chưa triển khai/train bốn module cải tiến.
+
 Ngày rà soát: 21/10/2026. Trạng thái: đã rà soát tĩnh và chạy kiểm tra module độc lập; chưa sửa mã huấn luyện/test, chưa chạy train hoặc đánh giá GPU. File này là kế hoạch trước khi triển khai sửa.
+
+**Cập nhật kiểm chứng cloud:** đã tải annotation thật, config/log và best.pth từ Modal trong lượt rà soát tiếp theo. Train có 10.353 ảnh, 26.317 box, **32 lớp có nhãn**; best.pth có head [33,256] nhưng **không có trọng số bốn module DQK**. Các ghi chú "chưa có checkpoint/dataset" ở phần lịch sử dưới đây đã được thay thế bởi bằng chứng mới trong `PLAN_FIX_TEST_THEN_RETRAIN_DQK.md`, `DATASET_CLOUD_AUDIT_20261021.json` và `cloud_audit/checkpoint_audit.json`. Chưa chạy inference hoặc train GPU mới.
 
 ## 1. Kết luận hiện tại
 
@@ -164,3 +170,77 @@ Bản DQK dùng COCOeval và lấy TP/FP/FN từ evalImgs là hướng hợp lý
 - Kết quả lưu `Results/RESULT_20261019_235139/result_RFDETR_DQK_Enhanced.json` có mAP50=0.0024, mAP50_95=0.0018, P/R/F1=0. Đây là dấu hiệu cần điều tra nhưng không đủ xác định nguyên nhân; các lỗi adapter/load/normalize ở trên là khả năng cần kiểm chứng, không phải kết luận về checkpoint đã chạy trước đó.
 
 Ưu tiên thực hiện: **A -> B -> C -> D**. Không chỉ chỉnh tên model/config hoặc bật enabled rồi coi như đã hoàn tất cải tiến.
+
+## 9. Kiểm tra lần hai: 32 lớp, 90 và head classification
+
+Đã tải wheel PyPI **rfdetr 1.10.1 và 1.11.0**, giải nén source vào `References/vendor_sources`. Không cài hai package vào môi trường và không tải checkpoint pretrained. Những kết luận dưới đây dựa trên source đúng phiên bản, không chỉ tài liệu latest.
+
+### 9.1. Phân biệt ba loại con số
+
+- **32**: danh sách lớp thực phẩm trong `configs/models_config.json` có đúng 32 tên duy nhất; wrapper và adapter enhanced hiện truyền `num_classes=32`.
+- **90**: mặc định `ModelConfig.num_classes` của RF-DETR. COCO detection có 80 lớp ngữ nghĩa nhưng category ID thưa có thể tới 90; vì thế không được hiểu mặc định này là dataset thực phẩm có 90 loại hay COCO có 90 lớp ngữ nghĩa.
+- **33**: với cấu hình custom 32 lớp trong hai phiên bản đang kiểm tra, builder tạo head `args.num_classes + 1`. Nếu hidden_dim=256 thì `class_embed.weight` phải có shape `[33,256]`, bias `[33]`; logits có chiều cuối 33. Nhãn foreground phải là 0..31 theo mapping training; slot cuối 32 là nền của custom model.
+- **91**: số hàng head tương ứng cấu hình mặc định 90. Khi làm việc với pretrained COCO phải dùng đúng mapping COCO, không áp dụng máy móc quy tắc custom cho raw category ID COCO; source predict có xử lý riêng sparse COCO IDs.
+
+Nguồn source: `rfdetr/config.py` (`num_classes=90`), `rfdetr/models/lwdetr.py` (builder `num_classes=args.num_classes+1`), `rfdetr/models/weights.py` (load pretrained rồi `reinitialize_detection_head(num_classes+1)` khi checkpoint có nhiều slot hơn cấu hình). Cả 1.10.1 và 1.11.0 có cơ chế này.
+
+**Kết luận chính xác:** dòng `RFDETRMedium(num_classes=32, ...)` trong wrapper không tự nó sai và không có bằng chứng code hiện tại chủ đích train 90 lớp. Thông báo head pretrained 91 slot rồi resize về 33 có thể là quá trình transfer learning bình thường. Tuy nhiên chưa có checkpoint thật/log thông báo 90 mà người dùng nhắc tới để xác nhận head thực tế của lần chạy cũ. Không suy ra head checkpoint chỉ từ số lớp được in trong báo cáo test.
+
+### 9.2. Các chốt kiểm tra cần thêm vào code khi sửa
+
+- Đọc mapping train thực tế sau khi loại parent category đúng quy tắc thư viện; assert tên lớp/order bằng schema đã lưu. File test phải dùng mapping train từ checkpoint, không tự suy ra thứ tự chỉ từ test.
+- Assert `model_config.num_classes == 32`, `class_embed.weight.shape == (33, hidden_dim)`, mọi encoder classification head có 33 hàng, `pred_logits.shape[-1] == 33`.
+- Đọc và in shape classification head **trong checkpoint trước khi load**; xác minh cùng shape với model sau load. Với wrapper, khóa có thể có prefix `net.`, phải xác định schema thay vì bỏ qua prefix/khóa thiếu.
+- Assert label training trong [0,31]. Khi COCO category IDs là 1..32, cần mapping 1->0,...,32->31; không lấy category_id trực tiếp làm label hoặc cắt bỏ category 32.
+- Category dummy/group trong Roboflow là khái niệm khác slot background của model. Có 33 mục categories trong JSON chưa có nghĩa có 33 lớp thật. Chỉ loại group không có annotation và phù hợp quan hệ supercategory; nếu dummy có annotation thì dừng để xử lý dữ liệu, không âm thầm bỏ.
+- Không đổi tất cả số 90 trong thư viện thành 32. Không thêm thủ công `+1` vào tham số facade `num_classes`; library builder đã thêm slot nội bộ.
+
+### 9.3. Lưu ý quan trọng về strict=False
+
+Kiểm tra PyTorch xác nhận: `strict=False` **không bỏ qua lỗi shape** nếu cùng tên khóa. Load trọng số 91 hàng vào layer 33 hàng cùng tên vẫn gây RuntimeError. Rủi ro trong adapter hiện tại là **khác tên/prefix** khiến missing/unexpected keys bị bỏ qua, hoặc bỏ sót module cải tiến; không phải strict=False luôn tự cắt 90 lớp thành 32. Điều này làm rõ thêm mục P0.4.
+
+## 10. Bằng chứng bổ sung về logic cải tiến và test
+
+Kết quả máy đọc được lưu tại `References/review_checks_20261021.json`.
+
+### 10.1. Kiểm tra wrapper với lõi giả lập
+
+Dùng facade/core RF giả lập để chạy chính wrapper DQK mà không tải model pretrained; kiểm tra này chỉ chứng minh control flow và gradient của wrapper, không xác minh backbone/API thực.
+
+- DARM được gọi 1 lần.
+- Cả 3 DAFD, 3 UFFR và 3 MFA đều được gọi **0 lần**.
+- Có **117 tensor tham số** không có gradient trong phép backward detection giả lập này, tương ứng các nhánh không được gọi.
+- Gọi `wrapper.train(dataset_dir=...)` gây chính xác lỗi `Module.train() got an unexpected keyword argument 'dataset_dir'`.
+
+Như vậy lỗi bỏ qua ba kỹ thuật không chỉ là nghi vấn khi đọc code, mà đã tái hiện bằng hook.
+
+### 10.2. UFFR: lỗi lưới tần số đã tái hiện
+
+Với input real ngẫu nhiên seed 42, batch=1, channels=8 và mask hiện tại:
+
+- Kích thước 16x16: max phần ảo sau IFFT khoảng **0.4033**.
+- Kích thước 40x40: max phần ảo khoảng **0.2295**.
+- Kích thước lẻ 15x17: phần ảo bằng 0 trong thử nghiệm.
+
+IFFT của phổ real-input sau lọc đối xứng đúng phải real trong sai số số học. Giá trị trên cho thấy lưới mask hiện tại phá đối xứng liên hợp ở trường hợp chẵn; `.real` làm mất phần ảo thay vì giải quyết nguyên nhân. Cần đổi sang tọa độ bin FFT đúng, chốt đơn vị bán kính và kiểm tra đáp ứng tần số. Không thay Gaussian tùy tiện khi chưa chốt yêu cầu UFFR ở mục 4.
+
+### 10.3. DAFD: gate khởi tạo chưa đúng giả định
+
+Seed 42, channels=8, input 2x8x15x17: mean ba gate khoảng **0.4863, 0.4078, 0.5376**, không phải 0.8. Bias conv cuối bằng logit(0.8) chưa đủ vì gamma/beta FiLM ngẫu nhiên tiếp tục biến đổi gate. Fusion zero-init vẫn giúp đầu ra DAFD ban đầu là identity, nhưng không sửa được regularizer và gate initialization.
+
+### 10.4. Số mức feature không được mặc định là ba
+
+Source 1.10.1: `RFDETRMediumConfig` kế thừa `projector_scale=['P4']`, hidden_dim=256, có bốn backbone taps `[3,6,9,12]`. Vì vậy **ba ModuleList không tự tương ứng ba neck outputs**, và bốn taps cũng không đồng nghĩa bốn resolution khác nhau. Phải kiểm tra cấu trúc backbone/projector thật khi chọn vị trí UFFR/DAFD/MFA. Resolution 640 chia hết patch_size(16)*num_windows(2)=32, nên 640 không bị sai điều kiện chia hết của Medium trong phiên bản này.
+
+### 10.5. Các lỗi test được xác nhận thêm qua source
+
+- Source `models/postprocess.py` của 1.11.0 dùng sigmoid rồi xếp hạng trên toàn bộ **query-class pairs**, giới hạn số chọn theo số phần tử có thật. Nhánh manual DQK lấy max mỗi query: khác thuật toán hậu xử lý đã xác nhận, không còn chỉ là khả năng.
+- Source `detr.py` của 1.10.1 normalize batch bằng mean/std. Nhánh manual DQK không làm bước này.
+- `confusion_matrix.py` gọi `predict(..., conf_threshold=eval_conf)`, trong khi tham số chuẩn là **threshold**. API nhận `**kwargs` để tương thích nhưng không dùng tham số đó cho ngưỡng lọc; ở đường gọi này ngưỡng có thể vẫn là mặc định 0.5. Điều này có thể làm thiếu detection trước khi tính AP ngay cả khi code ghi eval_conf=0.01.
+- Wrapper khi input là dict chuyển cả dict vào core; source `LWDETR.forward` nhận NestedTensor/tensor/list, không bóc dict `samples`. Nhánh dict của wrapper vì thế không đúng contract core đang dùng.
+- Validator DQK chỉ đọc imgsz/batch thành biến nhưng không enforce; `load_test_split()` chưa so sánh số ảnh/lớp với expected fields của config. Chỉ có giá trị `1481`/`32` trong config chưa bảo đảm runtime đã đánh giá đúng số đó.
+- JSON kết quả cũ đã kiểm tra không có `model_provenance`/shape classification head. Vì vậy không thể truy ngược từ file này để chứng minh checkpoint đã nạp đầy đủ hoặc đúng 32 lớp.
+
+### 10.6. Phạm vi kết luận sau lần hai
+
+Đã xác nhận lỗi control flow, nhiều lỗi số học/giao thức và cách thư viện xử lý 32/90. Chưa thể chứng nhận toàn hệ thống chạy đúng vì chưa có checkpoint thực tế, dataset cloud và chưa chạy mạng RF-DETR thật. Thứ tự sửa P0/P1 và nghiệm thu ở mục 7 vẫn áp dụng; không cần đổi số lớp từ 32 sang 90 để sửa các lỗi này.

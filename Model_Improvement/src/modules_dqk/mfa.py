@@ -13,7 +13,7 @@ class MFA(nn.Module):
         self.conv9 = nn.Conv2d(channels, channels, kernel_size=9, padding=4, groups=channels)
         self.avg_pool = nn.AvgPool2d(kernel_size=3, stride=1, padding=1)
         self.alpha_freq = alpha_freq
-        self.gate_conv = nn.Conv2d(channels, channels, 1)
+        self.gate_conv = nn.Conv2d(channels, 1, 1)
         self.dropout = nn.Dropout2d(dropout)
         self.gamma = nn.Parameter(torch.tensor(1e-3))
 

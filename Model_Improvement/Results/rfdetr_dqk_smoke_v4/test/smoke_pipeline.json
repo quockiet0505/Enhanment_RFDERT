@@ -1,0 +1,35 @@
+{
+  "rgb_resize_normalize_parity": true,
+  "native_postprocess_parity": true,
+  "input_shape": [
+    1,
+    3,
+    640,
+    640
+  ],
+  "native_detections": 300,
+  "logits_shape": [
+    1,
+    300,
+    33
+  ],
+  "smoke_only": true,
+  "full_test_not_run": true,
+  "load_validation": {
+    "strict": true,
+    "missing_keys": [],
+    "unexpected_keys": [],
+    "all_checkpoint_tensors_equal": true,
+    "state_entries": 648,
+    "architecture": {
+      "architecture": "dqk-four-modules-v1",
+      "uffr_mask": "gaussian",
+      "lambda_tv": 0.0001,
+      "lambda_sparsity": 1e-05,
+      "frequency_order": "DAFD_then_UFFR"
+    },
+    "checkpoint_epoch": 0,
+    "model_name": "RFDETRDQKEnhanced",
+    "rfdetr_version": "1.10.1"
+  }
+}

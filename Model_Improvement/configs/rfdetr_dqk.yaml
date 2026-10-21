@@ -21,14 +21,23 @@ training:
   seed: 42
   eval_interval: 1
   amp_dtype: "bf16"
+  multi_scale: false
 
 evaluation:
-  eval_conf: 0.01
-  cm_conf: 0.25
+  eval_conf: 0.0
+  cm_conf: 0.55
   iou_threshold: 0.50
   split: "test"
 
 loss_weights:
-  loss_vfl: 1.0
+  loss_cls: 1.0
   loss_bbox: 5.0
   loss_giou: 2.0
+# Combined DQK design. TV weight is an explicit experimental choice.
+# Gaussian UFFR follows the assignment; binary is available for paper ablation.
+dqk:
+  architecture: dqk-four-modules-v1
+  uffr_mask: gaussian
+  frequency_order: DAFD_then_UFFR
+  lambda_tv: 0.0001
+  lambda_sparsity: 0.00001

@@ -14,6 +14,9 @@ class DARM(nn.Module):
         self.act2 = nn.GELU()
         self.conv3 = nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1)
         self.alpha = nn.Parameter(torch.tensor(alpha_init))
+        # Start as identity when transferring a detector checkpoint.
+        nn.init.zeros_(self.conv3.weight)
+        nn.init.zeros_(self.conv3.bias)
 
     def forward(self, x):
         residual = self.conv1(x)

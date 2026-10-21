@@ -10,6 +10,7 @@ import hashlib
 import importlib.metadata
 import platform
 import uuid
+import sys
 from typing import Dict, List, Any, Optional, Tuple
 
 import numpy as np
@@ -18,7 +19,12 @@ import cv2
 import modal
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_FILE = os.path.join(CURRENT_DIR, "..", "..", "configs", "models_config.json")
+# Modal imports a CLI file as /root/common_test.py; normal package imports keep
+# /root/src/testing/common_test.py. Support both without depending on cwd.
+PROJECT_ROOT = (Path(__file__).resolve().parents[2]
+                if Path(__file__).parent.name == "testing" else Path(__file__).resolve().parent)
+sys.path.insert(0, str(PROJECT_ROOT))
+CONFIG_FILE = str(PROJECT_ROOT / "configs" / "models_config.json")
 PROTOCOL_NAME = "common-coco-v7-640-b1"
 REQUIRED_MODEL_KEYS = {
     "YOLOv26X",
@@ -30,6 +36,7 @@ REQUIRED_MODEL_KEYS = {
     "RFDETR_Medium",
     "RTDETR_L",
     "RFDETR_DQK_Enhanced",
+    "RFDETR_DQK_Legacy",
 }
 REQUIRED_MODEL_ROUTES = {
     "YOLOv26X": ("ultralytics", {"yolo"}),
@@ -41,6 +48,7 @@ REQUIRED_MODEL_ROUTES = {
     "RFDETR_Medium": ("rfdetr", {"rfdetr_medium"}),
     "RTDETR_L": ("ultralytics", {"rtdetr"}),
     "RFDETR_DQK_Enhanced": ("rfdetr", {"rfdetr_medium"}),
+    "RFDETR_DQK_Legacy": ("rfdetr", {"rfdetr_medium"}),
 }
 
 
@@ -208,6 +216,15 @@ def validate_configuration(config_data: Dict[str, Any]) -> None:
     required_batch_size = int(bench_cfg.get("batch_size", 0))
     if bench_cfg.get("protocol_name") != PROTOCOL_NAME:
         raise ValueError(f"benchmark_settings.protocol_name must be {PROTOCOL_NAME}")
+    required_settings = {"imgsz": 640, "batch_size": 1, "conf_threshold": 0.0,
+                         "operating_conf_threshold": 0.55, "iou_threshold": 0.5,
+                         "max_detections": 100, "expected_num_classes": 32,
+                         "expected_test_images": 1481}
+    for key, expected in required_settings.items():
+        if bench_cfg.get(key) != expected:
+            raise ValueError(f"benchmark_settings.{key} must be {expected}")
+    if len(classes) != bench_cfg["expected_num_classes"]:
+        raise ValueError("Configured class count is incorrect")
 
     supported = {
         "ultralytics": {"yolo", "rtdetr"},
@@ -217,11 +234,15 @@ def validate_configuration(config_data: Dict[str, Any]) -> None:
     models = config_data.get("models", {})
     if not models:
         raise ValueError("config.models is empty")
+    if int(bench_cfg.get("expected_num_models", 0)) != len(models):
+        raise ValueError("expected_num_models must match configured model entries")
     for model_key, model_cfg in models.items():
         family = model_cfg.get("family")
         model_type = model_cfg.get("model_type")
         if family not in supported or model_type not in supported[family]:
             raise ValueError(f"Unsupported configuration for {model_key}: family={family}, model_type={model_type}")
+        if model_key not in REQUIRED_MODEL_ROUTES:
+            raise ValueError(f"Unknown model key: {model_key}")
         required_family, allowed_model_types = REQUIRED_MODEL_ROUTES[model_key]
         if family != required_family or model_type not in allowed_model_types:
             raise ValueError(f"{model_key} must use family={required_family} and model_type in {sorted(allowed_model_types)}, got family={family}, model_type={model_type}")
@@ -303,17 +324,14 @@ runs_volume = modal.Volume.from_name(
     create_if_missing=False
 )
 
-PROJECT_ROOT = Path.cwd()
-
 image = (
     modal.Image.debian_slim(python_version="3.10")
-    .apt_install("git", "libgl1-mesa-glx", "libglib2.0-0")
+    .apt_install("git", "libgl1", "libglib2.0-0")
     .pip_install(
         "torch==2.6.0",
         "torchvision==0.21.0",
         "transformers==5.1.0",
-        "ultralytics==8.4.161",
-        "rfdetr==1.11.0",
+        "rfdetr==1.10.1",
         "roboflow>=1.1.33",
         "opencv-python-headless>=4.10.0.84",
         "pandas>=2.2.0",
@@ -331,6 +349,7 @@ image = (
         str(PROJECT_ROOT / "src"),
         remote_path="/root/src",
     )
+    .add_local_dir(str(PROJECT_ROOT / "configs"), remote_path="/root/configs")
 )
 
 class RoboflowCOCODatasetManager:
@@ -361,6 +380,9 @@ class RoboflowCOCODatasetManager:
                     print(f"[DATASET] Tìm thấy tập dữ liệu COCO có sẵn tại: {os.path.abspath(p)}")
                     self.dataset_root = p
                     return p
+
+        if target_dir:
+            raise FileNotFoundError(f"Requested dataset is missing: {target_dir}")
 
         download_dir = target_dir or self.dataset_root or os.path.join(CURRENT_DIR, "dataset")
         os.makedirs(download_dir, exist_ok=True)
@@ -408,6 +430,9 @@ class RoboflowCOCODatasetManager:
         self.coco_gt = COCO(test_ann)
 
         raw_cats = sorted(self.coco_gt.dataset.get("categories", []), key=lambda x: x["id"])
+        dummy_ids = {int(c["id"]) for c in raw_cats if c["name"].strip() == self.dummy_cat_name}
+        if any(int(ann["category_id"]) in dummy_ids for ann in self.coco_gt.dataset.get("annotations", [])):
+            raise ValueError("The ignored Roboflow group has annotations; refusing to drop it")
         self.valid_categories = [c for c in raw_cats if c["name"].strip() != self.dummy_cat_name]
         self.valid_cat_ids = [c["id"] for c in self.valid_categories]
         self.class_names = [c["name"] for c in self.valid_categories]
@@ -519,109 +544,7 @@ class UltralyticsAdapter:
         return self.model.model
 
 
-class RFDETRAdapter:
-    def __init__(self, model_cfg: Dict[str, Any], weights_path: str, class_names: List[str], name_to_cat_id: Dict[str, int], device: str = "cuda:0", conf_thresh: float = 0.0, imgsz: int = 640, max_detections: int = 100):
-        import sys
-        # Đảm bảo có thể import các module mở rộng
-        sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
-        
-        import rfdetr
-        from src.rfdetr.lwdetr_dqk import RFDETRDQKEnhanced
-
-        self.conf_thresh = conf_thresh
-        self.max_detections = max_detections
-        self.label_offset = int(model_cfg.get("label_offset", 0))
-        self.checkpoint_classes = model_cfg.get("checkpoint_classes") or class_names
-        indexed_names = {index: name for index, name in enumerate(self.checkpoint_classes)}
-        self.class_idx_to_cat_id, self.ignored_class_indices = build_class_mapping(indexed_names, name_to_cat_id, model_cfg, "RF-DETR")
-        
-        model_class_name = model_cfg.get("model_class", "RFDETRMedium")
-        if model_class_name == "RFDETRDQKEnhanced":
-            import torch
-            model_class = RFDETRDQKEnhanced
-            # Khởi tạo mô hình với num_classes = 32
-            self.model = model_class(num_classes=32)
-            
-            state_dict = torch.load(weights_path, map_location="cpu")
-            if 'model' in state_dict:
-                ckpt_weights = state_dict['model']
-            elif 'state_dict' in state_dict:
-                ckpt_weights = state_dict['state_dict']
-            else:
-                ckpt_weights = state_dict
-                
-            # Load trọng số vào model (Strict=False để xử lý các lớp thặng dư nhưng in cảnh báo nếu thiếu)
-            missing, unexpected = self.model.load_state_dict(ckpt_weights, strict=False)
-            print(f"[+] Loaded RFDETRDQKEnhanced weights. Missing keys: {len(missing)}, Unexpected keys: {len(unexpected)}")
-            
-            self.model.to(device)
-            self.model.eval()
-        else:
-            model_class = getattr(rfdetr, model_class_name, None)
-            if model_class is None: raise ValueError(f"Không tìm thấy class {model_class_name} trong package rfdetr")
-            self.model = model_class.from_checkpoint(weights_path, device=device, resolution=int(imgsz))
-
-        model_context = getattr(self.model, "model", getattr(self.model, "net", self.model))
-        model_args = getattr(model_context, "args", None)
-        self.background_class_id = int(getattr(model_args, "num_classes", len(self.checkpoint_classes)))
-        self.backend_max_detections = int(getattr(model_args, "num_select", max(self.max_detections, 300)))
-        self.imgsz = int(getattr(getattr(self.model, "model_config", None), "resolution", imgsz))
-
-    def predict_image(self, image_bgr: np.ndarray, orig_w: int, orig_h: int) -> List[Dict[str, Any]]:
-        from PIL import Image
-        import torch
-
-        image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
-        
-        # Nếu model tự custom thì chưa bọc hàm predict() giống như RFDETR API chuẩn, ta phải làm thủ công hoặc dùng wrapper
-        if hasattr(self.model, "predict"):
-            output = self.model.predict(Image.fromarray(image_rgb), threshold=self.conf_thresh)
-            boxes = np.asarray(output.xyxy)
-            scores = np.asarray(output.confidence)
-            labels = np.asarray(output.class_id).astype(int)
-        else:
-            # Fallback manual inference
-            import torchvision.transforms as T
-            transforms = T.Compose([T.ToTensor(), T.Resize((self.imgsz, self.imgsz))])
-            img_t = transforms(Image.fromarray(image_rgb)).unsqueeze(0).to(next(self.model.parameters()).device)
-            with torch.no_grad():
-                out = self.model(img_t)
-            
-            from rfdetr.utilities.box_ops import box_cxcywh_to_xyxy
-            scores_pred = out["pred_logits"].sigmoid()[0]
-            boxes_pred = box_cxcywh_to_xyxy(out["pred_boxes"][0])
-            topk_vals, topk_inds = torch.topk(scores_pred.max(-1)[0], self.backend_max_detections)
-            boxes = boxes_pred[topk_inds].cpu().numpy()
-            boxes[:, [0, 2]] *= orig_w
-            boxes[:, [1, 3]] *= orig_h
-            scores = topk_vals.cpu().numpy()
-            labels = scores_pred[topk_inds].argmax(-1).cpu().numpy()
-
-        foreground = labels != self.background_class_id
-        class_indices = labels - self.label_offset
-        ignored = np.isin(class_indices, list(self.ignored_class_indices))
-        candidates = np.flatnonzero(foreground & ~ignored & (scores >= self.conf_thresh))
-        order = candidates[np.argsort(-scores[candidates], kind="stable")][: self.max_detections]
-        detections = []
-        for box, score, raw_label in zip(boxes[order], scores[order], labels[order]):
-            cls_idx = int(raw_label) - self.label_offset
-            if cls_idx in self.ignored_class_indices: continue
-            if cls_idx not in self.class_idx_to_cat_id: continue
-            detection = normalize_coco_detection(box, score, self.class_idx_to_cat_id[cls_idx], orig_w, orig_h)
-            if detection is not None:
-                detections.append(detection)
-        return detections
-
-    def get_torch_module(self):
-        import torch
-        candidate = self.model
-        for _ in range(3):
-            if isinstance(candidate, torch.nn.Module):
-                return candidate
-            candidate = getattr(candidate, "model", None)
-            if candidate is None:
-                break
-        raise TypeError("RF-DETR did not expose an underlying torch.nn.Module")
+from src.testing.rfdetr_legacy_adapter import RFDETRAdapter
 
 
 class BenchmarkEngine:
@@ -888,6 +811,12 @@ def execute_common_coco_evaluation(dataset_dir: Optional[str] = None, output_dir
     if config_data is None:
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
             config_data = json.load(f)
+    validate_configuration(config_data)
+    with open(os.path.join(output_dir, "requested_config.json"), "w", encoding="utf-8") as source:
+        # Credentials do not belong in evaluation artifacts.
+        public_config = json.loads(json.dumps(config_data))
+        public_config.get("roboflow", {}).pop("api_key", None)
+        json.dump(public_config, source, ensure_ascii=False, indent=2)
 
     rf_info = config_data.get("roboflow", {})
     api_key = rf_info.get("api_key", "") or get_roboflow_api_key(config_data)
@@ -908,6 +837,8 @@ def execute_common_coco_evaluation(dataset_dir: Optional[str] = None, output_dir
     all_models_dict = config_data.get("models", {})
 
     if target_models:
+        if set(target_models) - set(all_models_dict):
+            raise ValueError("Unknown requested model(s)")
         eval_queue = {k: v for k, v in all_models_dict.items() if k in target_models}
     else:
         eval_queue = {model_key: model_cfg for model_key, model_cfg in all_models_dict.items() if model_cfg.get("enabled", False)}
@@ -922,7 +853,10 @@ def execute_common_coco_evaluation(dataset_dir: Optional[str] = None, output_dir
         if resolved_path:
             resolved_checkpoint_paths[model_key] = resolved_path
         else:
-            print(f"[!] Warning: Missing checkpoint for {model_key}")
+            raise FileNotFoundError(f"Missing checkpoint for {model_key}: {attempted_paths}")
+        requested_hash = model_cfg.get("checkpoint_sha256")
+        if requested_hash and sha256_file(resolved_path) != requested_hash:
+            raise ValueError(f"Checkpoint SHA256 mismatch for {model_key}")
 
     print("\n" + "="*85)
     print(f"BẮT ĐẦU ĐÁNH GIÁ CHỌN LỌC {len(eval_queue)} MÔ HÌNH ĐƯỢC CHỈ ĐỊNH")
@@ -936,6 +870,12 @@ def execute_common_coco_evaluation(dataset_dir: Optional[str] = None, output_dir
     class_names = ds_manager.class_names
     name_to_cat_id = ds_manager.name_to_cat_id
     test_image_paths = ds_manager.test_image_paths
+    if class_names != config_data["classes"] or len(class_names) != int(bench_cfg["expected_num_classes"]):
+        raise ValueError("Dataset class names/order differ from the benchmark configuration")
+    if len(test_images) != int(bench_cfg["expected_test_images"]):
+        raise ValueError("Wrong number of test images")
+    if bench_cfg.get("annotation_sha256") and ds_manager.test_annotation_sha256 != bench_cfg["annotation_sha256"]:
+        raise ValueError("Test annotation SHA256 mismatch")
 
     runtime_device = describe_runtime_device(device)
     protocol = build_protocol_metadata(bench_cfg, ds_manager.test_annotation_sha256, list(test_images.keys()), valid_categories, runtime_device)
@@ -959,36 +899,81 @@ def execute_common_coco_evaluation(dataset_dir: Optional[str] = None, output_dir
         if m_cfg["family"] == "ultralytics":
             adapter = UltralyticsAdapter(m_cfg, actual_weights, name_to_cat_id, device=device, conf_thresh=conf_thresh, imgsz=model_img_size, max_detections=max_detections)
         elif m_cfg["family"] == "rfdetr":
-            adapter = RFDETRAdapter(m_cfg, actual_weights, class_names, name_to_cat_id, device=device, conf_thresh=conf_thresh, imgsz=model_img_size, max_detections=max_detections)
+            if m_cfg.get("model_class") == "RFDETRDQKEnhanced":
+                from src.testing.rfdetr_enhanced_adapter import RFDETREnhancedAdapter
+                adapter_class = RFDETREnhancedAdapter
+            else:
+                adapter_class = RFDETRAdapter
+            adapter = adapter_class(m_cfg, actual_weights, class_names, name_to_cat_id, device=device, conf_thresh=conf_thresh, imgsz=model_img_size, max_detections=max_detections)
         else:
             raise ValueError(f"Unsupported model family: {m_cfg['family']}")
 
         effective_img_size = int(getattr(adapter, "imgsz", model_img_size))
+        pipeline_checks = {}
+        if isinstance(adapter, RFDETRAdapter):
+            # Check preprocessing on validation, before touching test predictions.
+            valid_dir = Path(ds_manager.dataset_root) / "valid"
+            with open(valid_dir / "_annotations.coco.json", encoding="utf-8") as source:
+                validation = json.load(source)
+            first = validation["images"][0]["file_name"]
+            candidates = [valid_dir / first, valid_dir / "images" / first]
+            validation_path = next((path for path in candidates if path.is_file()), None)
+            if validation_path is None:
+                raise FileNotFoundError("Validation parity image missing")
+            pipeline_checks = adapter.verify_pipeline(cv2.imread(str(validation_path)))
+            pipeline_checks["validation_image"] = first
         
         print("  [BENCHMARK] Đo GFLOPs và Parameters...")
-        gflops, params_m = BenchmarkEngine.measure_complexity(adapter, device=device, imgsz=effective_img_size)
+        # FLOP profiling is optional: unsupported operators and profiler mutations
+        # must not affect this checkpoint accuracy investigation.
+        if bench_cfg.get("measure_gflops", False):
+            gflops, params_m = BenchmarkEngine.measure_complexity(adapter, device=device, imgsz=effective_img_size)
+        else:
+            gflops = None
+            params_m = round(sum(p.numel() for p in adapter.get_torch_module().parameters()) / 1e6, 2)
 
         print("  [BENCHMARK] Đo Latency & FPS...")
         latency_ms, fps = BenchmarkEngine.measure_latency_and_fps(adapter, test_image_paths, device=device, warmup=warmup_n)
 
         print(f"  [INFERENCE] Đang suy luận trên {len(test_images)} ảnh test...")
         coco_predictions = []
-        for img_id, info in test_images.items():
+        for image_index, (img_id, info) in enumerate(test_images.items(), start=1):
             img_mat = cv2.imread(info["path"])
+            if img_mat is None:
+                raise ValueError(f"Cannot decode test image: {info['path']}")
             actual_h, actual_w = img_mat.shape[:2]
             preds = adapter.predict_image(img_mat, actual_w, actual_h)
             for p in preds:
                 coco_predictions.append({"image_id": int(img_id), "category_id": int(p["category_id"]), "bbox": p["bbox"], "score": float(p["score"])})
+            if image_index % 100 == 0:
+                print(f"[INFERENCE] {image_index}/{len(test_images)} images", flush=True)
+
+        with gzip.open(os.path.join(output_dir, f"predictions_{m_key}.json.gz"), "wt", encoding="utf-8") as source:
+            json.dump(coco_predictions, source, allow_nan=False)
 
         print("  [COCOEVAL] Tính toán metric COCO...")
         eval_metrics = COCOBenchmarkEvaluator.evaluate(coco_gt, coco_predictions, valid_cat_ids, list(test_images.keys()), max_detections=max_detections, operating_score_threshold=operating_conf_thresh, operating_iou_threshold=operating_iou_thresh)
 
+        inference_request = build_requested_inference_config(m_cfg, bench_cfg, class_names)
+        inference_config = build_resolved_inference_config(adapter, inference_request)
         res_item = {
             "model_key": m_key, "model_name": disp_name, "Precision": eval_metrics["Precision"], "Recall": eval_metrics["Recall"], "F1": eval_metrics["F1"],
             "mAP50": eval_metrics["mAP50"], "mAP50_95": eval_metrics["mAP50_95"], "mAP75": eval_metrics["mAP75"],
+            "AR100": eval_metrics["AR100"], "AP_small": eval_metrics["AP_small"],
+            "AP_medium": eval_metrics["AP_medium"], "AP_large": eval_metrics["AP_large"],
             "Patience": m_cfg.get("patience", 10), "GFLOPs": gflops, "Parameters": params_m, "Latency": latency_ms, "FPS": fps,
             "status": "Hoàn tất đánh giá", "protocol": protocol, "operating_point": eval_metrics["operating_point"],
             "per_class": eval_metrics["per_class"],
+            "num_images": len(test_images), "num_predictions": len(coco_predictions),
+            "model_provenance": {"family": m_cfg["family"], "model_type": m_cfg["model_type"],
+                "model_class": m_cfg["model_class"], "checkpoint_sha256": sha256_file(actual_weights),
+                "inference_imgsz": effective_img_size, "inference_batch_size": 1,
+                "adapter_source_sha256": sha256_source_file(str(PROJECT_ROOT / "src/testing/rfdetr_legacy_adapter.py")),
+                "enhanced_adapter_source_sha256": (sha256_source_file(str(PROJECT_ROOT / "src/testing/rfdetr_enhanced_adapter.py")) if m_cfg.get("model_class") == "RFDETRDQKEnhanced" else None),
+                "inference_config": inference_config,
+                "inference_config_sha256": compute_payload_sha256(inference_config),
+                "load_validation": getattr(adapter, "load_validation", {}), "pipeline_checks": pipeline_checks},
+            "hardware_note": "GFLOPs not measured for this accuracy diagnosis" if gflops is None else "Optional profiler estimate",
         }
         results_list.append(res_item)
 
@@ -1021,7 +1006,14 @@ def evaluate_models_cloud(model_names: Optional[List[str]] = None, config_dict: 
     cfg = config_dict or load_config()
     m_cfg = cfg.get("modal_settings", {})
     cloud_dataset = m_cfg.get("cloud_dataset_dir", "/data/dataset/Completed-Project-5")
-    cloud_output = os.path.join(m_cfg.get("cloud_output_dir", "/data/runs"), "Common_Eval_Results")
+    run_id = f"run-{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:8]}"
+    cloud_output = os.path.join(m_cfg.get("cloud_output_dir", "/runs/dqk_legacy_evaluation"), run_id)
+
+    from src.testing.test_legacy_evaluation import run_checks
+    checks = run_checks()
+    os.makedirs(cloud_output, exist_ok=True)
+    with open(os.path.join(cloud_output, "semantic_checks.json"), "w", encoding="utf-8") as source:
+        json.dump(checks, source, indent=2)
 
     execute_common_coco_evaluation(dataset_dir=cloud_dataset, output_dir=cloud_output, target_models=model_names, config_data=cfg, device="cuda:0")
 
@@ -1033,7 +1025,7 @@ def evaluate_models_cloud(model_names: Optional[List[str]] = None, config_dict: 
                 with open(fp, "rb") as f:
                     files_data[fname] = f.read()
 
-    dataset_volume.commit()
+    runs_volume.commit()
     return files_data
 
 

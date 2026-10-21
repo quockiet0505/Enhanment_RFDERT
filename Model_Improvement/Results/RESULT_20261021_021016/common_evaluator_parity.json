@@ -1,0 +1,19 @@
+{
+  "passed": true,
+  "reference_source": "E:\\CNTT\\NCKH\\Train-V2\\TEST-COMMON\\common_test.py",
+  "reference_source_sha256": "e4417fb0279928415cf0c7881635b65ad306a30eaecbb02f0fa29474c4d100f6",
+  "annotation_sha256": "d7f69d3b3933acd390fae8b65cb577e9e07d7b9b96031ab39ab74cdbc9901376",
+  "num_images": 1481,
+  "num_predictions": 146370,
+  "metric_differences": {
+    "Precision": 0.0,
+    "Recall": 0.0,
+    "F1": 0.0,
+    "mAP50": 0.0,
+    "mAP50_95": 0.0,
+    "mAP75": 0.0,
+    "AR100": 0.0
+  },
+  "all_32_per_class_metrics_equal": true,
+  "operating_point_equal": true
+}

@@ -1,0 +1,205 @@
+{
+  "source_volume": "rfdetr-runs",
+  "source_path": "/rfdetr_dqk_enhanced/checkpoints/best.pth",
+  "bytes": 134690432,
+  "sha256": "c2bdde40551a54c412656d4c5e0e1710201cd45aaa1d1543ba4d367fed8f1379",
+  "checkpoint_epoch": 22,
+  "global_step": 14904,
+  "model_name": "RFDETRMedium",
+  "rfdetr_version": "1.10.1",
+  "model_config": {
+    "encoder": "dinov2_windowed_small",
+    "out_feature_indexes": [
+      3,
+      6,
+      9,
+      12
+    ],
+    "dec_layers": 4,
+    "two_stage": true,
+    "projector_scale": [
+      "P4"
+    ],
+    "hidden_dim": 256,
+    "patch_size": 16,
+    "num_windows": 2,
+    "sa_nheads": 8,
+    "ca_nheads": 16,
+    "dec_n_points": 2,
+    "num_queries": 300,
+    "num_select": 300,
+    "postprocess_trace_alpha": 0.2,
+    "bbox_reparam": true,
+    "lite_refpoint_refine": true,
+    "layer_norm": true,
+    "amp": true,
+    "num_channels": 3,
+    "num_classes": 32,
+    "pretrain_weights": "/root/.roboflow/models/rf-detr-medium.pth",
+    "device": "cuda",
+    "resolution": 640,
+    "group_detr": 13,
+    "gradient_checkpointing": false,
+    "compile": false,
+    "fused_optimizer": true,
+    "positional_encoding_size": 40,
+    "ia_bce_loss": true,
+    "segmentation_head": false,
+    "use_grouppose_keypoints": false,
+    "keypoint_cross_attn": true,
+    "inter_instance_kp_attn": false,
+    "grouppose_keypoint_dim_downscale": 1,
+    "dual_projector": false,
+    "dual_projector_kp_only": false,
+    "num_keypoints_per_class": [],
+    "num_decoder_registers": 0,
+    "mask_downsample_ratio": 4,
+    "backbone_lora": false,
+    "freeze_encoder": false,
+    "license": "Apache-2.0",
+    "model_name": "RFDETRMedium"
+  },
+  "top_level_keys": [
+    "model",
+    "args",
+    "epoch",
+    "state_dict",
+    "global_step",
+    "pytorch-lightning_version",
+    "loops",
+    "callbacks",
+    "optimizer_states",
+    "lr_schedulers",
+    "model_name",
+    "model_config",
+    "rfdetr_version"
+  ],
+  "model_state_entries": 510,
+  "lightning_state_entries": 510,
+  "model_dqk_keys": [],
+  "lightning_dqk_keys": [],
+  "classification_head_shapes": {
+    "transformer.enc_out_class_embed.0.weight": [
+      33,
+      256
+    ],
+    "transformer.enc_out_class_embed.0.bias": [
+      33
+    ],
+    "transformer.enc_out_class_embed.1.weight": [
+      33,
+      256
+    ],
+    "transformer.enc_out_class_embed.1.bias": [
+      33
+    ],
+    "transformer.enc_out_class_embed.2.weight": [
+      33,
+      256
+    ],
+    "transformer.enc_out_class_embed.2.bias": [
+      33
+    ],
+    "transformer.enc_out_class_embed.3.weight": [
+      33,
+      256
+    ],
+    "transformer.enc_out_class_embed.3.bias": [
+      33
+    ],
+    "transformer.enc_out_class_embed.4.weight": [
+      33,
+      256
+    ],
+    "transformer.enc_out_class_embed.4.bias": [
+      33
+    ],
+    "transformer.enc_out_class_embed.5.weight": [
+      33,
+      256
+    ],
+    "transformer.enc_out_class_embed.5.bias": [
+      33
+    ],
+    "transformer.enc_out_class_embed.6.weight": [
+      33,
+      256
+    ],
+    "transformer.enc_out_class_embed.6.bias": [
+      33
+    ],
+    "transformer.enc_out_class_embed.7.weight": [
+      33,
+      256
+    ],
+    "transformer.enc_out_class_embed.7.bias": [
+      33
+    ],
+    "transformer.enc_out_class_embed.8.weight": [
+      33,
+      256
+    ],
+    "transformer.enc_out_class_embed.8.bias": [
+      33
+    ],
+    "transformer.enc_out_class_embed.9.weight": [
+      33,
+      256
+    ],
+    "transformer.enc_out_class_embed.9.bias": [
+      33
+    ],
+    "transformer.enc_out_class_embed.10.weight": [
+      33,
+      256
+    ],
+    "transformer.enc_out_class_embed.10.bias": [
+      33
+    ],
+    "transformer.enc_out_class_embed.11.weight": [
+      33,
+      256
+    ],
+    "transformer.enc_out_class_embed.11.bias": [
+      33
+    ],
+    "transformer.enc_out_class_embed.12.weight": [
+      33,
+      256
+    ],
+    "transformer.enc_out_class_embed.12.bias": [
+      33
+    ],
+    "class_embed.weight": [
+      33,
+      256
+    ],
+    "class_embed.bias": [
+      33
+    ]
+  },
+  "first_model_keys": [
+    "_kp_active_mask",
+    "transformer.decoder.layers.0.self_attn.in_proj_weight",
+    "transformer.decoder.layers.0.self_attn.in_proj_bias",
+    "transformer.decoder.layers.0.self_attn.out_proj.weight",
+    "transformer.decoder.layers.0.self_attn.out_proj.bias",
+    "transformer.decoder.layers.0.norm1.weight",
+    "transformer.decoder.layers.0.norm1.bias",
+    "transformer.decoder.layers.0.cross_attn.sampling_offsets.weight",
+    "transformer.decoder.layers.0.cross_attn.sampling_offsets.bias",
+    "transformer.decoder.layers.0.cross_attn.attention_weights.weight",
+    "transformer.decoder.layers.0.cross_attn.attention_weights.bias",
+    "transformer.decoder.layers.0.cross_attn.value_proj.weight"
+  ],
+  "optimizer_state_count": 0,
+  "model_keys_matching_current_wrapper_prefixes": 0,
+  "state_dict_first_keys": [
+    "model._kp_active_mask",
+    "model.transformer.decoder.layers.0.self_attn.in_proj_weight",
+    "model.transformer.decoder.layers.0.self_attn.in_proj_bias",
+    "model.transformer.decoder.layers.0.self_attn.out_proj.weight",
+    "model.transformer.decoder.layers.0.self_attn.out_proj.bias",
+    "model.transformer.decoder.layers.0.norm1.weight"
+  ]
+}

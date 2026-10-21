@@ -1,0 +1,48 @@
+{
+  "rows": 493,
+  "epoch_min": 0,
+  "epoch_max": 32,
+  "columns": [
+    "epoch",
+    "step",
+    "train/cardinality_error",
+    "train/cardinality_error_0",
+    "train/cardinality_error_1",
+    "train/cardinality_error_2",
+    "train/cardinality_error_enc",
+    "train/class_error",
+    "train/loss",
+    "train/loss_bbox",
+    "train/loss_bbox_aux",
+    "train/loss_ce",
+    "train/loss_ce_aux",
+    "train/loss_giou",
+    "train/loss_giou_aux",
+    "train/lr",
+    "train/lr_max",
+    "train/lr_min",
+    "val/F1",
+    "val/ema_mAP_50",
+    "val/ema_mAP_50_95",
+    "val/ema_mAP_75",
+    "val/ema_mAR",
+    "val/mAP_50",
+    "val/mAP_50_95",
+    "val/mAP_75",
+    "val/mAR",
+    "val/precision",
+    "val/recall"
+  ],
+  "validation_maxima": {
+    "val/ema_mAP_50": {
+      "value": 0.9878447651863098,
+      "epoch": 22,
+      "step": 14903
+    },
+    "val/ema_mAP_50_95": {
+      "value": 0.8749710917472839,
+      "epoch": 22,
+      "step": 14903
+    }
+  }
+}
