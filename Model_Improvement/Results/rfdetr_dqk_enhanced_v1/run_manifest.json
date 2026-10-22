@@ -1,0 +1,31 @@
+{
+  "run_name": "rfdetr_dqk_enhanced_v1",
+  "smoke": false,
+  "status": "complete",
+  "phase": "complete",
+  "dataset_dir": "/data/datasets/completed-project-5/coco",
+  "resume": null,
+  "architecture": "dqk-four-modules-v1",
+  "code_sha256": {
+    "src/common/dqk_checkpoints.py": "02f9baf78b2e1b4b12954204c4f647eac8c995883adcba2844b8063e4d025d05",
+    "src/common/run_versions.py": "46b10f9c5bc0011c620a1152511f987e0497d043aea3998504ef13ea35306536",
+    "src/rfdetr/__init__.py": "8a70eb60bd139bca4607225478ca4fde8101c26b30938a2bbe13dffd5b08aa72",
+    "src/rfdetr/train_dqk.py": "b56e3ae798d14cd488d9b1967ef70845171b1a75f22fa71fd513acc006040362",
+    "src/rfdetr/lwdetr_dqk.py": "537bca3971376bc93b1b9bb381ffb9237c34296bf98744a7bc3e9c2b8901367b",
+    "src/modules_dqk/__init__.py": "e90ec5353dbc55e99a782dde4e355e5284e19dc391c7bb804e895c6ddfaebefe",
+    "src/modules_dqk/uffr.py": "52cbc3524f764fdee930b0a3b83e619a643575fa34fe9ef5742b897e5f6f12d9",
+    "src/modules_dqk/darm.py": "1c4cca19ec19937a677f1308071f82a7ad97d8820f98e720c6bc9eca36efd11f",
+    "src/modules_dqk/mfa.py": "13635c1e52a92425897a8b0443df42af6f61a2cc97585955c0157d6d99c53d4d",
+    "src/modules_dqk/dafd.py": "33b3f8ed81cf5221bb04e329c6f9a0bbcdfa1c8cdf779c7851282214a94a9b42",
+    "src/testing/rfdetr_legacy_adapter.py": "d102f212a0c8d99cc7331075202b64fc175f0bce360e8d37395bafbe1d6c41e7",
+    "src/testing/test_legacy_evaluation.py": "8db9b59080a17ab2338611bf80aa8492856919d2db26bbe60fd9563af7ea2215",
+    "src/testing/test_dqk_pipeline.py": "4405c49cc4ae5eac61bb5f3d33ffffe1269c752f97a4ac5c1402c2707a344880",
+    "src/testing/common_test.py": "3380bd16cf9414f3271bfed3b635311e275700149c2468c6d719e1cbe67ebec8",
+    "src/testing/rfdetr_enhanced_adapter.py": "1b4424eb901d1d780108bfa03c9c4f14493e99a937855abcb2a69b0690b169f4",
+    "src/testing/verify_common_metric_parity.py": "8b90fe294aa3e05a0c29501db6e39da93bfe60f1762d364f428e48e67ba66ed1",
+    "configs/models_config.json": "986220d926dd3bcc0c2c3dab47bde218cb18234b9a30c02e4719c1f81f116e69",
+    "configs/rfdetr_dqk.yaml": "877b7df5d01fbc333352351f0d60cc1050c801e12ec194444198f7862b8f84cb"
+  },
+  "best_checkpoint": "/runs/rfdetr_dqk_enhanced_v1/checkpoints/best.pth",
+  "checkpoint_sha256": "7ab6a272c7bf2b289f74bf9ea343e8cab2f960178167e0539d11f8cb11a6d746"
+}

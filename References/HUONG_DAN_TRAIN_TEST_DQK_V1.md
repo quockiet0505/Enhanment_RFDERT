@@ -133,3 +133,15 @@ Các kiểm tra CPU nằm ở `src/testing/test_dqk_pipeline.py`; COCO/mapping �
 - Smoke v1-v3 bắt được lỗi chuẩn bị cache/metadata export, đã sửa; các thư mục đó được giữ nguyên với trạng thái failed. Chưa có lượt train chính thức `rfdetr_dqk_enhanced_vN` được chạy trong công việc này.
 
 **Không dùng điểm smoke làm kết quả cải tiến cuối.** Kết quả legacy đã kiểm chứng vẫn là mAP50:95=88.00%; kết quả enhanced chính thức chỉ có sau lượt train đầy đủ và test toàn bộ do pipeline mới thực hiện.
+
+### Bổ sung GFLOPs từ checkpoint đã train (22/10/2026)
+
+Sau khi lượt train/test hoàn tất, chạy riêng:
+
+```powershell
+python -m modal run Model_Improvement/modal_app/modal_profile_dqk.py --run-name rfdetr_dqk_enhanced_v1
+```
+
+Thay tên run nếu cần. Lệnh chỉ nạp `checkpoints/best.pth` để đo forward, không train hoặc test lại toàn bộ ảnh. Khi không còn operator chưa có bộ đếm, lệnh bổ sung GFLOPs vào báo cáo JSON/CSV/Markdown trên volume Modal rồi tải các file cập nhật về thư mục Results tương ứng. Nó kiểm tra SHA256 checkpoint khớp báo cáo accuracy trước khi cập nhật; mọi metric accuracy/latency được giữ nguyên. `--attach-only` chỉ gắn kết quả đo đã lưu, không dùng GPU đo lại.
+
+Đây là **ước lượng tính toán** ở input `[1,3,640,640]`, eval FP32, theo quy ước fvcore **1 FMA = 1 FLOP**. Có tính DARM/DAFD/UFFR/MFA, attention và FFT; FFT, nonlinear và nội suy dùng công thức ước lượng được ghi trong `test/complexity_profile.json`. Không tính đọc ảnh/resize/hậu xử lý detection. Không so trực tiếp với số từ profiler dùng 2 FLOP/MAC hoặc thiếu operator; hãy đo các model bằng cùng công cụ/quy ước. Pipeline train/test chính vẫn tách phép đo này ra để profiler không ảnh hưởng lượt đánh giá accuracy.

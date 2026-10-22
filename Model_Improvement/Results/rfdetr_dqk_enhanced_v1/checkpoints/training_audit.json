@@ -1,0 +1,7 @@
+{
+  "optimizer_steps": 18792,
+  "optimizer_covers_all_trainable": true,
+  "no_duplicate_parameters": true,
+  "dqk_parameters_with_grad": 136,
+  "dqk_gradients_finite": true
+}

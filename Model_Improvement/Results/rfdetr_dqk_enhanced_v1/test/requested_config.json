@@ -1,0 +1,108 @@
+{
+  "modal_settings": {
+    "volume_name": "food-detection-training",
+    "app_name": "dqk-rfdetr-legacy-evaluate",
+    "gpu": "A100",
+    "timeout_seconds": 7200,
+    "cloud_dataset_dir": "/data/datasets/completed-project-5/coco",
+    "cloud_output_dir": "/runs/dqk_legacy_evaluation"
+  },
+  "roboflow": {
+    "workspace": "nckhcict2025",
+    "project": "completed-project",
+    "version": 5,
+    "dummy_category_name": "19-8-BoSungAnhChoCacLopBiTh-v3zo"
+  },
+  "benchmark_settings": {
+    "protocol_name": "common-coco-v7-640-b1",
+    "imgsz": 640,
+    "expected_num_models": 3,
+    "conf_threshold": 0.0,
+    "operating_conf_threshold": 0.55,
+    "iou_threshold": 0.5,
+    "max_detections": 100,
+    "expected_num_classes": 32,
+    "expected_test_images": 1481,
+    "warmup_runs": 10,
+    "batch_size": 1,
+    "chart_dpi": 300,
+    "local_output_dir": "Results",
+    "annotation_sha256": "d7f69d3b3933acd390fae8b65cb577e9e07d7b9b96031ab39ab74cdbc9901376"
+  },
+  "classes": [
+    "beef",
+    "bellpepper",
+    "bittergourd",
+    "bottlegourd",
+    "broccoli",
+    "cabbage",
+    "carrot",
+    "cauliflower",
+    "chayote",
+    "chicken",
+    "chickenegg",
+    "chickenleg",
+    "chickenwin",
+    "corn",
+    "cucumber",
+    "duckegg",
+    "eggplant",
+    "garlic",
+    "ginger",
+    "jicama",
+    "okra",
+    "onion",
+    "pork",
+    "potato",
+    "pumpkin",
+    "radish",
+    "scallion",
+    "shrimp",
+    "spongegourd",
+    "sweetpotato",
+    "tofu",
+    "tomato"
+  ],
+  "ignored_checkpoint_classes": [
+    "19-8-BoSungAnhChoCacLopBiTh-v3zo"
+  ],
+  "models": {
+    "RFDETR_DQK_Enhanced": {
+      "display_name": "RF-DETR DQK enhanced (rfdetr_dqk_enhanced_v1)",
+      "family": "rfdetr",
+      "model_type": "rfdetr_medium",
+      "model_class": "RFDETRDQKEnhanced",
+      "label_offset": 0,
+      "imgsz": 640,
+      "weights": "/runs/rfdetr_dqk_enhanced_v1/checkpoints/best.pth",
+      "patience": 10,
+      "enabled": true,
+      "checkpoint_sha256": "7ab6a272c7bf2b289f74bf9ea343e8cab2f960178167e0539d11f8cb11a6d746"
+    },
+    "RFDETR_Medium": {
+      "display_name": "RF-DETR Medium Baseline",
+      "family": "rfdetr",
+      "model_type": "rfdetr_medium",
+      "model_class": "RFDETRMedium",
+      "label_offset": 0,
+      "imgsz": 640,
+      "weights": "/models/RFDETR_Medium/best.pth",
+      "local_weights": "models/RFDETR_Medium/best.pth",
+      "patience": 10,
+      "enabled": false
+    },
+    "RFDETR_DQK_Legacy": {
+      "display_name": "RF-DETR Medium (DQK legacy baseline, no DQK modules)",
+      "family": "rfdetr",
+      "model_type": "rfdetr_medium",
+      "model_class": "RFDETRMedium",
+      "label_offset": 0,
+      "imgsz": 640,
+      "weights": "/runs/rfdetr_dqk_enhanced/checkpoints/best.pth",
+      "local_weights": "../../References/cloud_audit/best.pth",
+      "checkpoint_sha256": "c2bdde40551a54c412656d4c5e0e1710201cd45aaa1d1543ba4d367fed8f1379",
+      "patience": 10,
+      "enabled": false
+    }
+  }
+}
